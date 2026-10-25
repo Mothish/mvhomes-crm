@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{% if project %}Edit project{% else %}Add project{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="crumb" href="{% url 'projects' %}">← Projects</a><h1>{% if project %}Edit {{ project.name }}{% else %}Add project{% endif %}</h1></div></div>
+<form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
+  {% include "crm/_form.html" %}
+  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'projects' %}">Cancel</a><button class="btn btn-primary" type="submit">Save project</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block public %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">{% include "crm/_logo.html" with size="lg" %}{% include "crm/_wordmark.html" with dark=True %}<span class="auth-sub">Lead CRM</span></div>
+    <p class="muted" style="text-align:center;margin:0 0 20px">Every enquiry, followed up. Every booking, tracked.</p>
+    {% if form.errors %}<div class="alert alert-error">Incorrect username or password.</div>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label for="id_username">Username</label><input class="input" id="id_username" name="username" autocomplete="username" autofocus required value="{{ form.username.value|default:'' }}"></div>
+      <div class="field"><label for="id_password">Password</label><input class="input" type="password" id="id_password" name="password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
+    </form>
+    {% if show_demo %}
+    <div class="demo"><strong>Demo logins</strong> (password <code>Demo@1234</code>)
+      <table>
+        <tr><td>Admin (MD)</td><td><code>karthik</code></td></tr>
+        <tr><td>Sales Manager</td><td><code>meera</code></td></tr>
+        <tr><td>Team Leader</td><td><code>arun</code></td></tr>
+        <tr><td>Sales Executive</td><td><code>divya</code></td></tr>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

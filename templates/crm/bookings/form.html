@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Book{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="crumb" href="{% url 'lead_detail' lead.pk %}">← {{ lead.name }}</a><h1>🎉 Record booking for {{ lead.name }}</h1>
+  <p>The lead becomes a customer with its full history kept.</p></div></div>
+<form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
+  {% include "crm/_form.html" %}
+  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'lead_detail' lead.pk %}">Cancel</a><button class="btn btn-success" type="submit">Confirm booking</button></div>
+</form>
+{% endblock %}

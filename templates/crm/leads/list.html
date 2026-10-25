@@ -1,0 +1,58 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Leads{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Leads <span class="badge b-gray">{{ total }}</span></h1><p>Every enquiry in one place. Filter, follow up, assign.</p></div>
+  <div class="head-actions">
+    <span class="seg"><a class="active" href="{% url 'lead_list' %}?{{ request.GET.urlencode }}">List</a><a href="{% url 'lead_board' %}?{{ request.GET.urlencode }}">Board</a></span>
+    {% if can_export %}
+    <a class="btn btn-secondary" href="{% url 'lead_import' %}">Import</a>
+    <a class="btn btn-secondary" href="{% url 'lead_export' %}?{{ request.GET.urlencode }}">Export Excel</a>
+    {% endif %}
+  </div>
+</div>
+{% include "crm/_filters.html" %}
+
+<div class="card">
+  <form method="post" action="{% url 'lead_bulk_assign' %}" id="bulk-form">{% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  {% if can_reassign %}
+  <div class="bulkbar" id="bulkbar">
+    <strong><span id="bulk-count">0</span> selected</strong>
+    <select class="input input-sm" name="to_user" required>
+      <option value="">Assign to…</option>
+      {% for a in assignees %}<option value="{{ a.pk }}">{{ a|person }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary btn-sm" type="submit">Reassign</button>
+  </div>
+  {% endif %}
+  {% if page.object_list %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr>
+      {% if can_reassign %}<th style="width:28px"><input type="checkbox" id="check-all"></th>{% endif %}
+      <th>Lead</th><th>Stage</th><th class="hide-sm">Project</th><th class="hide-sm">Source</th><th class="hide-sm">Owner</th><th>Next follow-up</th><th class="hide-sm">Received</th>
+    </tr></thead>
+    <tbody>
+    {% for lead in page %}
+      <tr class="{% if lead.is_overdue %}row-overdue{% endif %}">
+        {% if can_reassign %}<td><input type="checkbox" name="ids" value="{{ lead.pk }}" class="row-check"></td>{% endif %}
+        <td>
+          <div class="who"><span class="temp temp-{{ lead.temperature }}" title="{{ lead.get_temperature_display }}"></span>
+            <div><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a>{% if lead.enquiry_count > 1 %} <span class="badge b-orange" title="Enquired {{ lead.enquiry_count }} times">{{ lead.enquiry_count }}×</span>{% endif %}
+            <div class="muted small">{{ lead.phone }}{% if lead.area %} · {{ lead.area }}{% endif %}</div></div></div>
+        </td>
+        <td><span class="badge b-{{ lead.stage|stage_color }}">{{ lead.get_stage_display }}</span></td>
+        <td class="hide-sm">{{ lead.project.name|default:"—" }}<div class="muted small">{{ lead.get_property_type_display }} {{ lead.get_budget_display }}</div></td>
+        <td class="hide-sm">{{ lead.get_source_display }}</td>
+        <td class="hide-sm"><div class="who"><span class="avatar avatar-sm">{{ lead.owner|initials }}</span><span class="small">{{ lead.owner|person }}</span></div></td>
+        <td>{% if lead.is_open and lead.next_followup %}<span class="{% if lead.is_overdue %}text-red{% endif %}">{{ lead.next_followup|date:"d M, h:i A" }}</span>{% if lead.is_overdue %}<div class="small text-red">overdue {{ lead.next_followup|timesince }}</div>{% endif %}{% elif lead.is_open %}<span class="text-amber small">Not set</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="hide-sm muted small">{{ lead.created_at|date:"d M Y" }}<br>{{ lead.created_at|timesince }} ago</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% include "crm/_pagination.html" %}
+  {% else %}<div class="empty">No leads match these filters.</div>{% endif %}
+  </form>
+</div>
+{% endblock %}

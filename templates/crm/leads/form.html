@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{% if lead %}Edit lead{% else %}New lead{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="crumb" href="{% if lead %}{% url 'lead_detail' lead.pk %}{% else %}{% url 'lead_list' %}{% endif %}">← {% if lead %}{{ lead.name }}{% else %}Leads{% endif %}</a>
+    <h1>{% if lead %}Edit lead{% else %}New lead{% endif %}</h1>
+    {% if not lead %}<p>Takes under 30 seconds. Only name, phone and source are required. Duplicates are detected automatically.</p>{% endif %}
+  </div>
+</div>
+<form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
+  {% include "crm/_form.html" %}
+  <div class="form-actions">
+    <a class="btn btn-secondary" href="{% if lead %}{% url 'lead_detail' lead.pk %}{% else %}{% url 'lead_list' %}{% endif %}">Cancel</a>
+    <button class="btn btn-primary" type="submit">{% if lead %}Save changes{% else %}Create lead{% endif %}</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}{% if not lead %}<script>CRM.initDuplicateCheck("{% url 'lead_check_phone' %}");</script>{% endif %}{% endblock %}

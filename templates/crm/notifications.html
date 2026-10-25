@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Notifications</h1></div>
+  {% if unread_count %}<form method="post" action="{% url 'notifications_read_all' %}">{% csrf_token %}<button class="btn btn-secondary">Mark all as read</button></form>{% endif %}</div>
+<div class="card">
+  {% for n in items %}
+  <a class="notif{% if not n.is_read %} unread{% endif %}" href="{% url 'notification_open' n.pk %}"><span class="dot"></span>
+    <div><div>{{ n.text }}</div><div class="muted small">{{ n.created_at|timesince }} ago</div></div></a>
+  {% empty %}<div class="empty">You're all caught up.</div>{% endfor %}
+</div>
+{% endblock %}

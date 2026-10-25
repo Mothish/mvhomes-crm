@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}{% if person %}Edit user{% else %}Add user{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="crumb" href="{% url 'users' %}">← Users</a><h1>{% if person %}Edit {{ person|person }}{% else %}Add user{% endif %}</h1></div></div>
+<form method="post" class="card card-body form-card" novalidate autocomplete="off">{% csrf_token %}
+  {% include "crm/_form.html" %}
+  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'users' %}">Cancel</a><button class="btn btn-primary" type="submit">Save user</button></div>
+</form>
+{% endblock %}

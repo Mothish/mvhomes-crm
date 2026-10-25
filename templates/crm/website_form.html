@@ -1,0 +1,76 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Website form{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Website enquiry form</h1><p>Every submission becomes a lead instantly, is auto-assigned round-robin and notifies the executive.</p></div>
+  <div class="head-actions">
+    <a class="btn btn-secondary" href="{% url 'enquire' %}" target="_blank" rel="noopener">Open full page ↗</a>
+    <a class="btn btn-primary" href="{% url 'lead_list' %}?source=website">All website leads</a>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi kpi-hero"><span class="kpi-label">Today</span><span class="kpi-value">{{ stats.today }}</span><span class="kpi-sub">website enquiries</span></div>
+  <div class="kpi" style="--kc:#6366f1"><span class="kpi-label">Last 7 days</span><span class="kpi-value">{{ stats.week }}</span></div>
+  <div class="kpi" style="--kc:#0ea5e9"><span class="kpi-label">Last 30 days</span><span class="kpi-value">{{ stats.month }}</span><span class="kpi-sub">{{ stats.month_contacted|pct:stats.month }}% contacted</span></div>
+  <div class="kpi" style="--kc:#16a34a"><span class="kpi-label">Booked (30 days)</span><span class="kpi-value">{{ stats.month_booked }}</span><span class="kpi-sub">{{ stats.month_booked|pct:stats.month }}% conversion</span></div>
+</div>
+
+<div class="grid-main">
+  <div class="stack">
+    <section class="card">
+      <div class="card-header"><h2>Share &amp; embed</h2></div>
+      <div class="card-body stack" style="gap:16px">
+        <div>
+          <label class="small"><strong>Full-page link</strong>: share on Instagram bio, Google Business, SMS, hoardings (QR code)</label>
+          <div class="copy-row"><input class="input" readonly value="{{ page_url }}" id="page-url"><button class="btn btn-secondary" type="button" data-copy="page-url">Copy</button></div>
+        </div>
+        <div>
+          <label class="small"><strong>Widget link</strong>: compact version for popups or WhatsApp catalogue</label>
+          <div class="copy-row"><input class="input" readonly value="{{ widget_url }}" id="widget-url"><button class="btn btn-secondary" type="button" data-copy="widget-url">Copy</button></div>
+        </div>
+        <div>
+          <label class="small"><strong>Embed code</strong>: paste into any page of {{ company_website }} (WordPress, Wix, HTML)</label>
+          <textarea class="input code" readonly rows="3" id="embed-code">{{ embed_code }}</textarea>
+          <button class="btn btn-primary btn-sm" type="button" data-copy="embed-code" style="margin-top:6px">Copy embed code</button>
+        </div>
+        <p class="small muted" style="margin:0">Protected by a hidden spam trap and a limit of 5 enquiries per device per hour. Repeat numbers are recorded as re-enquiries, not duplicates.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Latest website enquiries</h2><a class="small" href="{% url 'lead_list' %}?source=website">View all →</a></div>
+      {% if recent %}
+      <div class="table-wrap"><table class="table"><tbody>
+        {% for lead in recent %}<tr>
+          <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a><div class="muted small">{{ lead.project.name|default:"Any project" }} · {{ lead.created_at|timesince }} ago</div></td>
+          <td><span class="badge b-{{ lead.stage|stage_color }}">{{ lead.get_stage_display }}</span></td>
+          <td><div class="who"><span class="avatar avatar-sm">{{ lead.owner|initials }}</span><span class="small">{{ lead.owner|person }}</span></div></td>
+          <td class="small">{% if lead.first_response_at %}<span class="text-green">Called in {{ lead.response_minutes|minutes }}</span>{% else %}<span class="text-red">Not contacted</span>{% endif %}</td>
+        </tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<div class="empty">No website enquiries yet.</div>{% endif %}
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><h2>Live preview</h2><span class="muted small">Exactly what visitors see</span></div>
+    <div class="card-body preview-wrap">
+      <iframe src="{% url 'enquire_widget' %}" title="Widget preview" class="preview-frame"></iframe>
+      <p class="small muted" style="margin:8px 0 0">Submitting here creates a real lead. Use it to test the flow end-to-end.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var el = document.getElementById(btn.dataset.copy);
+    el.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(el.value) : Promise.reject()).catch(function () { document.execCommand('copy'); })
+      .finally(function () { CRM.toast('Copied to clipboard'); });
+  });
+});
+</script>
+{% endblock %}

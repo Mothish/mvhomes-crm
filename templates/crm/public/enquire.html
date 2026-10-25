@@ -1,0 +1,29 @@
+{% extends "public_base.html" %}
+{% block title %}Find your dream home{% endblock %}
+{% block public %}
+<div class="public">
+  <div class="public-hero">
+    <div class="hero-copy">
+      <div class="public-brand">{% include "crm/_logo.html" with size="lg" %}{% include "crm/_wordmark.html" %}</div>
+      <h1>Find your next home with <span>{{ company }}</span></h1>
+      <p class="tagline">{{ company_tagline }}</p>
+      <p class="hero-desc">RERA-approved apartments and villas across Chennai. Share a few details and a property advisor will call you within 30 minutes.</p>
+      <div class="proj-list">
+        {% for p in projects %}<div class="proj"><strong>{{ p.name }}</strong><small>📍 {{ p.location }}<br>{{ p.property_types }} · from ₹{{ p.price_from|floatformat:0 }} L</small></div>{% endfor %}
+      </div>
+      <p class="small hero-call" style="margin-top:20px">Prefer to talk? Call <a href="tel:{{ company_phone }}" style="color:#fff;font-weight:700">{{ company_phone }}</a></p>
+    </div>
+    <form method="post" class="enquiry-card" novalidate>{% csrf_token %}
+      <h2>Request a call back</h2>
+      <p class="muted small" style="margin-top:0">Free consultation · No spam</p>
+      {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+      {% for field in form %}
+        {% if field.name == 'website' %}<div class="hp" aria-hidden="true">{{ field }}</div>
+        {% elif field.name == 'consent' %}<div class="field"><label class="check small">{{ field }} {{ field.label }}</label>{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}</div>
+        {% else %}<div class="field{% if field.errors %} has-error{% endif %}">{{ field }}{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}</div>{% endif %}
+      {% endfor %}
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Get a call back →</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

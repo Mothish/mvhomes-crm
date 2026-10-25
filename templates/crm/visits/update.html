@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Site visit result{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="crumb" href="{% url 'lead_detail' visit.lead_id %}">← {{ visit.lead.name }}</a><h1>How did the site visit go?</h1>
+  <p>{{ visit.project }} · {{ visit.scheduled_at|date:"D d M, h:i A" }} · with {{ visit.executive|person }}</p></div></div>
+<form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
+  {% include "crm/_form.html" %}
+  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'lead_detail' visit.lead_id %}">Cancel</a><button class="btn btn-primary" type="submit">Save result</button></div>
+</form>
+{% endblock %}

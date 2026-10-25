@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Ad spend{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Monthly ad spend</h1><p>Enter what you spent on each channel. Reports then show cost per lead and cost per booking.</p></div>
+  <form method="get" class="filters" style="margin:0"><input class="input" type="month" name="month" value="{{ month|date:'Y-m' }}" onchange="this.form.submit()"></form>
+</div>
+<form method="post" class="card form-card">{% csrf_token %}
+  <div class="card-header"><h2>{{ month|date:"F Y" }}</h2><span class="muted">Total {{ total|inr }}</span></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Source</th><th style="width:220px">Spend (₹)</th><th class="num">Leads received</th><th class="num">Cost per lead</th></tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td><strong>{{ r.label }}</strong></td>
+      <td><input class="input" name="amount_{{ r.key }}" inputmode="decimal" value="{% if r.amount is not None %}{{ r.amount|floatformat:0 }}{% endif %}" placeholder="0"></td>
+      <td class="num">{{ r.leads }}</td><td class="num">{{ r.cpl|inr|default:"—" }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="card-body form-actions" style="margin:0"><button class="btn btn-primary" type="submit">Save ad spend</button></div>
+</form>
+{% endblock %}

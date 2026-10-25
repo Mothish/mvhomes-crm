@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Schedule site visit{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="crumb" href="{% url 'lead_detail' lead.pk %}">← {{ lead.name }}</a><h1>Schedule a site visit</h1>
+  <p>The lead moves to "Site Visit Scheduled" and a reminder is set 3 hours before.</p></div></div>
+<form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
+  {% include "crm/_form.html" %}
+  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'lead_detail' lead.pk %}">Cancel</a><button class="btn btn-primary" type="submit">Schedule visit</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Transfer leads{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="crumb" href="{% url 'users' %}">← Users</a><h1>Transfer leads from {{ person|person }}</h1>
+  <p><strong>{{ open_count }}</strong> open lead{{ open_count|pluralize }} will be moved. Every move is recorded in the lead's assignment history and the audit log.</p></div></div>
+<form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
+  {% include "crm/_form.html" with wide=True %}
+  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'users' %}">Cancel</a><button class="btn btn-primary" type="submit">Transfer {{ open_count }} lead{{ open_count|pluralize }}</button></div>
+</form>
+{% endblock %}

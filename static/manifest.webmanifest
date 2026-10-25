@@ -1,0 +1,11 @@
+{
+  "name": "MV Homes Lead CRM",
+  "short_name": "MV Homes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1426",
+  "theme_color": "#0a1426",
+  "icons": [
+    {"src": "/static/img/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}

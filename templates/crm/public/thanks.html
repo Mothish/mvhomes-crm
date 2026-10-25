@@ -1,0 +1,11 @@
+{% extends "public_base.html" %}
+{% block title %}Thank you{% endblock %}
+{% block public %}
+<div class="auth-wrap"><div class="auth-card" style="text-align:center">
+  {% include "crm/_logo.html" with size="lg" %}
+  <h1>Thank you!</h1>
+  <p class="muted">Your enquiry has reached our sales team. A property advisor will call you shortly.</p>
+  <p>Need help right away? Call <strong>{{ company_phone }}</strong></p>
+  <a class="btn btn-secondary" href="{% url 'enquire' %}">Back to projects</a>
+</div></div>
+{% endblock %}

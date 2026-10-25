@@ -1,0 +1,15 @@
+[Unit]
+Description=MV Homes Lead CRM (gunicorn)
+After=network.target
+
+[Service]
+User=mvhomes
+Group=mvhomes
+WorkingDirectory=/opt/mvhomes
+EnvironmentFile=/etc/mvhomes.env
+ExecStart=/opt/mvhomes/.venv/bin/gunicorn config.wsgi:application -c deploy/gunicorn.conf.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

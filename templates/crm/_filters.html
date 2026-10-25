@@ -1,0 +1,40 @@
+{% load crm_tags %}
+<form class="filters{% if f.stage or f.source or f.project or f.owner or f.temp or f.due %} expanded{% endif %}" method="get">
+  {% if keep_view %}<input type="hidden" name="view" value="{{ keep_view }}">{% endif %}
+  <input class="input" type="search" name="q" value="{{ f.q }}" placeholder="Name, phone, area…">
+  <button class="btn btn-secondary filter-toggle" type="button" onclick="this.form.classList.toggle('expanded')" aria-label="Show filters"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Filters</button>
+  {% if not hide_stage %}
+  <select class="input" name="stage" onchange="this.form.submit()">
+    <option value="">All stages</option>
+    <option value="open"{% if f.stage == 'open' %} selected{% endif %}>All open</option>
+    {% for k, v in stages %}<option value="{{ k }}"{% if f.stage == k %} selected{% endif %}>{{ v }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <select class="input" name="source" onchange="this.form.submit()">
+    <option value="">All sources</option>
+    {% for k, v in sources %}<option value="{{ k }}"{% if f.source == k %} selected{% endif %}>{{ v }}</option>{% endfor %}
+  </select>
+  <select class="input" name="project" onchange="this.form.submit()">
+    <option value="">All projects</option>
+    {% for p in projects %}<option value="{{ p.pk }}"{% if f.project == p.pk|stringformat:'s' %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
+  </select>
+  {% if not is_exec %}
+  <select class="input" name="owner" onchange="this.form.submit()">
+    <option value="">All owners</option>
+    {% for o in owners %}<option value="{{ o.pk }}"{% if f.owner == o.pk|stringformat:'s' %} selected{% endif %}>{{ o|person }}</option>{% endfor %}
+    {% if is_mgmt %}<option value="none"{% if f.owner == 'none' %} selected{% endif %}>Unassigned</option>{% endif %}
+  </select>
+  {% endif %}
+  <select class="input" name="temp" onchange="this.form.submit()">
+    <option value="">Any temperature</option>
+    {% for k, v in temps %}<option value="{{ k }}"{% if f.temp == k %} selected{% endif %}>{{ v }}</option>{% endfor %}
+  </select>
+  <select class="input" name="due" onchange="this.form.submit()">
+    <option value="">Any follow-up</option>
+    <option value="overdue"{% if f.due == 'overdue' %} selected{% endif %}>Overdue</option>
+    <option value="today"{% if f.due == 'today' %} selected{% endif %}>Due today</option>
+    <option value="untouched"{% if f.due == 'untouched' %} selected{% endif %}>Never contacted</option>
+  </select>
+  <button class="btn btn-secondary filter-apply" type="submit">Apply</button>
+  <a class="small filter-reset" href="?">Reset</a>
+</form>

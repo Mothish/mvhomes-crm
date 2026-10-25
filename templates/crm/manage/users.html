@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Users &amp; teams{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Users &amp; teams</h1><p>Control who can log in, their role, team, and whether they receive auto-assigned leads.</p></div>
+  <a class="btn btn-primary" href="{% url 'user_create' %}">+ Add user</a>
+</div>
+<div class="grid-main">
+  <section class="card">
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>User</th><th>Role</th><th class="hide-sm">Team</th><th class="num">Open leads</th><th>Auto-assign</th><th></th></tr></thead>
+      <tbody>{% for p in people %}<tr{% if not p.is_active %} style="opacity:.55"{% endif %}>
+        <td><div class="who"><span class="avatar avatar-sm">{{ p|initials }}</span><div><strong>{{ p|person }}</strong><div class="muted small">@{{ p.username }}{% if not p.is_active %} · deactivated{% endif %}</div></div></div></td>
+        <td><span class="badge {% if p.profile.role == 'admin' %}b-purple{% elif p.profile.role == 'manager' %}b-blue{% elif p.profile.role == 'leader' %}b-amber{% else %}b-gray{% endif %}">{{ p.profile.get_role_display }}</span></td>
+        <td class="hide-sm">{{ p.profile.team.name|default:"—" }}</td>
+        <td class="num">{{ p.open_leads }}</td>
+        <td>{% if p.profile.accepts_leads and p.is_active %}<span class="text-green">On</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
+        <td class="actions"><a class="btn btn-secondary btn-sm" href="{% url 'user_edit' p.pk %}">Edit</a>
+          {% if p.open_leads %}<a class="btn btn-secondary btn-sm" href="{% url 'user_transfer' p.pk %}">Transfer leads</a>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <div class="stack">
+    <section class="card">
+      <div class="card-header"><h2>Teams</h2></div>
+      <div class="table-wrap"><table class="table"><tbody>{% for t in teams %}<tr><td><strong>{{ t.name }}</strong><div class="muted small">Leader: {{ t.leader|person:"none" }}</div></td><td class="num">{{ t.n }} member{{ t.n|pluralize }}</td></tr>
+        {% empty %}<tr><td class="empty">No teams yet.</td></tr>{% endfor %}</tbody></table></div>
+      <form method="post" action="{% url 'team_create' %}" class="card-body" style="border-top:1px solid var(--border)">{% csrf_token %}
+        <strong class="small">New team</strong>
+        {% include "crm/_form.html" with form=team_form wide=True %}
+        <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Create team</button></div>
+      </form>
+    </section>
+    <div class="insight small"><strong>Executive leaving?</strong> Use <em>Transfer leads</em> to move all their open leads to a colleague, or spread them round-robin, in one click. The full history moves with each lead.</div>
+  </div>
+</div>
+{% endblock %}

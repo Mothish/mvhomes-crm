@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Bookings{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Bookings &amp; customers</h1><p>{{ page.paginator.count }} booking{{ page.paginator.count|pluralize }} · {{ totals.value|crore }} total value · {{ totals.amount|inr }} collected as booking amount</p></div>
+  <form method="get"><select class="input" name="project" onchange="this.form.submit()"><option value="">All projects</option>
+    {% for p in projects %}<option value="{{ p.pk }}"{% if project == p.pk|stringformat:'s' %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></form>
+</div>
+<div class="card">
+  {% if page.object_list %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Customer</th><th>Project · Unit</th><th class="num">Deal value</th><th class="num hide-sm">Booking amount</th><th>Date</th><th class="hide-sm">Executive</th><th class="hide-sm">Source</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
+    <tbody>{% for b in page %}<tr>
+      <td><a href="{% url 'lead_detail' b.lead_id %}"><strong>{{ b.lead.name }}</strong></a><div class="muted small">{{ b.lead.phone }}</div></td>
+      <td>{{ b.project }} · <strong>{{ b.unit_no }}</strong></td>
+      <td class="num"><strong>{{ b.deal_value|crore }}</strong></td>
+      <td class="num hide-sm">{{ b.booking_amount|inr }}</td>
+      <td>{{ b.booking_date|date:"d M Y" }}</td>
+      <td class="hide-sm">{{ b.executive|person }}</td>
+      <td class="hide-sm">{{ b.lead.get_source_display }}</td>
+      {% if is_admin %}<td class="actions"><form method="post" action="{% url 'booking_cancel' b.pk %}" class="inline" onsubmit="return confirm('Cancel this booking? The lead goes back to Negotiation.')">{% csrf_token %}<button class="btn btn-danger btn-sm">Cancel</button></form></td>{% endif %}
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% include "crm/_pagination.html" %}
+  {% else %}<div class="empty">No bookings yet.</div>{% endif %}
+</div>
+{% endblock %}

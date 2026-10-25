@@ -1,0 +1,27 @@
+{% extends "public_base.html" %}
+{% block title %}Enquire{% endblock %}
+{% block public %}
+<div class="widget">
+  {% if submitted %}
+  <div class="widget-done">
+    <span class="logo logo-lg">✓</span>
+    <h2>Thank you!</h2>
+    <p class="muted">A property advisor from {{ company }} will call you shortly.</p>
+    <p class="small">Urgent? Call <strong>{{ company_phone }}</strong></p>
+    <a class="btn btn-secondary btn-sm" href="{% url 'enquire_widget' %}">Send another enquiry</a>
+  </div>
+  {% else %}
+  <form method="post" novalidate>
+    <div class="widget-head">{% include "crm/_logo.html" %}<div>{% include "crm/_wordmark.html" with dark=True %}<small>Get a free call back</small></div></div>
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+    {% for field in form %}
+      {% if field.name == 'website' %}<div class="hp" aria-hidden="true">{{ field }}</div>
+      {% elif field.name == 'consent' %}<div class="field"><label class="check small">{{ field }} {{ field.label }}</label>{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}</div>
+      {% else %}<div class="field{% if field.errors %} has-error{% endif %}">{{ field }}{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}</div>{% endif %}
+    {% endfor %}
+    <button class="btn btn-primary btn-block btn-lg" type="submit">Request call back →</button>
+    <p class="muted small" style="text-align:center;margin:8px 0 0">We reply within 30 minutes · No spam</p>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

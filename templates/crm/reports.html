@@ -1,0 +1,115 @@
+{% extends "base.html" %}{% load crm_tags static %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Reports</h1><p>{{ start|date:"d M Y" }} – {{ end|date:"d M Y" }}</p></div>
+  {% if can_export %}<div class="head-actions"><a class="btn btn-secondary" href="{% url 'ad_spend' %}">Enter ad spend</a>
+    <a class="btn btn-secondary" href="{% url 'lead_export' %}?from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}{% if project %}&project={{ project }}{% endif %}">Export leads</a></div>{% endif %}
+</div>
+
+<div class="tabs">
+  <a class="tab{% if tab == 'sources' %} active{% endif %}" href="?{% url_with tab='sources' %}">💰 Source ROI</a>
+  <a class="tab{% if tab == 'team' %} active{% endif %}" href="?{% url_with tab='team' %}">👥 Executive performance</a>
+  <a class="tab{% if tab == 'lost' %} active{% endif %}" href="?{% url_with tab='lost' %}">📉 Lost reasons</a>
+</div>
+
+<form class="filters" method="get">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <label class="small muted">From</label><input class="input" type="date" name="from" value="{{ start|date:'Y-m-d' }}">
+  <label class="small muted">To</label><input class="input" type="date" name="to" value="{{ end|date:'Y-m-d' }}">
+  <select class="input" name="project"><option value="">All projects</option>{% for p in projects %}<option value="{{ p.pk }}"{% if project == p.pk|stringformat:'s' %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+  <button class="btn btn-primary" type="submit">Apply</button>
+  {% for k, label in periods %}<a class="tab" href="?tab={{ tab }}&period={{ k }}{% if project %}&project={{ project }}{% endif %}">{{ label }}</a>{% endfor %}
+</form>
+
+{% if tab == 'sources' %}
+{% if best or worst %}<p class="insight">
+  {% if best %}💡 <strong>{{ best.label }}</strong> is your most efficient channel at <strong>{{ best.cpb|inr }}</strong> per booking ({{ best.bookings }} booking{{ best.bookings|pluralize }} from {{ best.leads }} leads). {% endif %}
+  {% if worst %}⚠️ <strong>{{ worst.label }}</strong> spent <strong>{{ worst.spend|inr }}</strong> with no bookings from this period's leads yet.{% endif %}
+</p>{% endif %}
+<div class="kpis">
+  <div class="kpi"><span class="kpi-label">Leads</span><span class="kpi-value">{{ totals.leads }}</span></div>
+  <div class="kpi" style="--kc:#f97316"><span class="kpi-label">Site visits</span><span class="kpi-value">{{ totals.visits }}</span></div>
+  <div class="kpi" style="--kc:#16a34a"><span class="kpi-label">Bookings</span><span class="kpi-value">{{ totals.bookings }}</span><span class="kpi-sub">{{ totals.value|crore }}</span></div>
+  <div class="kpi" style="--kc:#ef4444"><span class="kpi-label">Ad spend</span><span class="kpi-value">{{ totals.spend|crore }}</span><span class="kpi-sub">CPL {{ totals.cpl|inr|default:"—" }} · CPB {{ totals.cpb|inr|default:"—" }}</span></div>
+</div>
+<div class="grid-2">
+  <section class="card span-2"><div class="card-header"><h2>Leads → visits → bookings by source</h2></div>
+    <div class="card-body"><div class="chart-box"><canvas id="c-main"></canvas></div></div></section>
+  <section class="card span-2"><div class="card-header"><h2>Source ROI</h2><span class="muted small">Outcomes of leads received in this period · CPL = cost per lead · CPB = cost per booking</span></div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Source</th><th class="num">Leads</th><th class="num">Contacted</th><th class="num">Site visits</th><th class="num">Bookings</th><th class="num">Conv.</th><th class="num">Booking value</th><th class="num">Ad spend</th><th class="num">CPL</th><th class="num">CPB</th><th class="num">ROI</th></tr></thead>
+      <tbody>{% for r in rows %}{% if r.leads or r.spend %}<tr>
+        <td><strong>{{ r.label }}</strong>{% if best and r.key == best.key %} <span class="badge b-green">Best</span>{% endif %}</td>
+        <td class="num">{{ r.leads }}</td><td class="num">{{ r.contacted }}</td><td class="num">{{ r.visits }}</td><td class="num"><strong>{{ r.bookings }}</strong></td>
+        <td class="num">{{ r.conversion }}%</td><td class="num">{{ r.value|crore }}</td>
+        <td class="num">{% if r.spend %}{{ r.spend|inr }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num">{{ r.cpl|inr|default:"—" }}</td><td class="num">{{ r.cpb|inr|default:"—" }}</td>
+        <td class="num">{% if r.roi %}<span class="{% if r.roi >= 10 %}text-green{% endif %}">{{ r.roi }}×</span>{% else %}—{% endif %}</td>
+      </tr>{% endif %}{% endfor %}</tbody>
+    </table></div></section>
+</div>
+
+{% elif tab == 'team' %}
+<div class="grid-2">
+  <section class="card span-2"><div class="card-header"><h2>Activity vs results</h2></div>
+    <div class="card-body"><div class="chart-box"><canvas id="c-main"></canvas></div></div></section>
+  <section class="card span-2"><div class="card-header"><h2>Executive performance</h2></div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Executive</th><th class="num">Leads assigned</th><th class="num">Calls</th><th class="num">WhatsApp</th><th class="num">Site visits</th><th class="num">Bookings</th><th class="num">Value</th><th class="num">Conv.</th><th class="num">Avg response</th><th class="num">Overdue now</th></tr></thead>
+      <tbody>{% for r in rows %}<tr>
+        <td><div class="who"><span class="rank rank-{{ forloop.counter }}">{{ forloop.counter }}</span><span class="avatar avatar-sm">{{ r.user|initials }}</span>{{ r.user|person }}</div></td>
+        <td class="num">{{ r.new }}</td><td class="num">{{ r.calls }}</td><td class="num">{{ r.whatsapp }}</td><td class="num">{{ r.visits }}</td>
+        <td class="num"><strong>{{ r.bookings }}</strong></td><td class="num">{{ r.value|crore }}</td><td class="num">{{ r.conversion }}%</td>
+        <td class="num {% if r.response and r.response > 120 %}text-red{% endif %}">{{ r.response|minutes }}</td>
+        <td class="num {% if r.overdue %}text-red{% endif %}">{{ r.overdue }}</td></tr>{% endfor %}</tbody>
+    </table></div></section>
+</div>
+
+{% else %}
+<div class="grid-2">
+  <section class="card"><div class="card-header"><h2>Why we lose customers</h2><span class="muted small">{{ total }} lost in this period</span></div>
+    <div class="card-body"><div class="chart-box chart-sm"><canvas id="c-main"></canvas></div></div></section>
+  <section class="card"><div class="card-header"><h2>Reasons</h2></div>
+    <div class="table-wrap"><table class="table"><tbody>{% for r in rows %}<tr>
+      <td><strong>{{ r.label }}</strong></td><td class="num">{{ r.count }}</td>
+      <td style="width:45%"><div class="progress"><span style="width:{{ r.pct }}%"></span></div></td><td class="num small">{{ r.pct }}%</td></tr>
+      {% empty %}<tr><td class="empty">No lost leads in this period.</td></tr>{% endfor %}</tbody></table></div></section>
+  <section class="card"><div class="card-header"><h2>Where in the journey they dropped</h2></div>
+    <div class="table-wrap"><table class="table"><tbody>{% for s in by_stage %}<tr><td>{{ s.label }}</td><td class="num"><strong>{{ s.count }}</strong></td></tr>{% endfor %}</tbody></table></div></section>
+  <section class="card"><div class="card-header"><h2>Recently lost</h2></div>
+    <div class="table-wrap"><table class="table"><tbody>{% for lead in recent %}<tr>
+      <td><a href="{% url 'lead_detail' lead.pk %}">{{ lead.name }}</a><div class="muted small">{{ lead.project.name|default:"" }} · {{ lead.owner|person }}</div></td>
+      <td><span class="badge b-gray">{{ lead.get_lost_reason_display }}</span></td><td class="small muted">{{ lead.stage_changed_at|date:"d M" }}</td></tr>
+      {% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div></section>
+</div>
+{% endif %}
+{{ chart|json_script:"chart-data" }}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+<script>
+(function () {
+  var d = JSON.parse(document.getElementById('chart-data').textContent), tab = "{{ tab|escapejs }}";
+  var el = document.getElementById('c-main'); if (!el) return;
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  var opts = {maintainAspectRatio: false, interaction: {mode: 'index', intersect: false}, scales: {y: {beginAtZero: true}, x: {grid: {display: false}}}};
+  if (tab === 'sources') {
+    new Chart(el, {type: 'bar', data: {labels: d.labels, datasets: [
+      {label: 'Leads', data: d.leads, backgroundColor: '#c9d6ea', borderRadius: 5},
+      {label: 'Site visits', data: d.visits, backgroundColor: '#1f3a68', borderRadius: 5},
+      {label: 'Bookings', data: d.bookings, backgroundColor: '#c99a3b', borderRadius: 5}]}, options: opts});
+  } else if (tab === 'team') {
+    new Chart(el, {type: 'bar', data: {labels: d.labels, datasets: [
+      {label: 'Calls', data: d.calls, backgroundColor: '#c9d6ea', borderRadius: 5, yAxisID: 'y'},
+      {label: 'Site visits', data: d.visits, backgroundColor: '#1f3a68', borderRadius: 5, yAxisID: 'y1'},
+      {label: 'Bookings', data: d.bookings, backgroundColor: '#c99a3b', borderRadius: 5, yAxisID: 'y1'}]},
+      options: Object.assign({}, opts, {scales: {y: {beginAtZero: true, title: {display: true, text: 'Calls'}}, y1: {beginAtZero: true, position: 'right', grid: {drawOnChartArea: false}}, x: {grid: {display: false}}}})});
+  } else {
+    new Chart(el, {type: 'doughnut', data: {labels: d.labels, datasets: [{data: d.values,
+      backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#8b5cf6', '#64748b', '#0ea5e9', '#94a3b8']}]},
+      options: {maintainAspectRatio: false, cutout: '58%', plugins: {legend: {position: 'right'}}}});
+  }
+})();
+</script>
+{% endblock %}

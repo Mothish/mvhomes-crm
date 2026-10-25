@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Targets{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Targets · {{ month|date:"F Y" }}</h1><p>Monthly site visit and booking targets per executive, with live progress.</p></div>
+  <div class="head-actions"><a class="btn btn-secondary" href="?month={{ prev|date:'Y-m' }}">‹ {{ prev|date:"M" }}</a><a class="btn btn-secondary" href="?">This month</a><a class="btn btn-secondary" href="?month={{ next|date:'Y-m' }}">{{ next|date:"M" }} ›</a></div>
+</div>
+<form method="post" class="card">{% csrf_token %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Executive</th><th style="width:130px">Visit target</th><th>Visits progress</th><th style="width:130px">Booking target</th><th>Bookings progress</th></tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td><div class="who"><span class="avatar avatar-sm">{{ r.user|initials }}</span><div>{{ r.user|person }}<div class="muted small">{{ r.user.profile.get_role_display }}</div></div></div></td>
+      <td>{% if can_edit %}<input class="input" type="number" min="0" name="sv_{{ r.user.pk }}" value="{{ r.target.site_visits|default:0 }}">{% else %}{{ r.target.site_visits|default:"—" }}{% endif %}</td>
+      <td><div class="small">{{ r.visits }} / {{ r.target.site_visits|default:0 }}</div><div class="progress{% if r.target and r.visits >= r.target.site_visits %} done{% endif %}"><span style="width:{% widthratio r.visits r.target.site_visits|default:1 100 %}%;max-width:100%"></span></div></td>
+      <td>{% if can_edit %}<input class="input" type="number" min="0" name="bk_{{ r.user.pk }}" value="{{ r.target.bookings|default:0 }}">{% else %}{{ r.target.bookings|default:"—" }}{% endif %}</td>
+      <td><div class="small">{{ r.bookings }} / {{ r.target.bookings|default:0 }}</div><div class="progress{% if r.target and r.bookings >= r.target.bookings %} done{% endif %}"><span style="width:{% widthratio r.bookings r.target.bookings|default:1 100 %}%;max-width:100%"></span></div></td>
+    </tr>{% empty %}<tr><td colspan="5" class="empty">No executives.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if can_edit %}<div class="card-body form-actions" style="margin:0"><button class="btn btn-primary" type="submit">Save targets</button></div>{% endif %}
+</form>
+{% endblock %}

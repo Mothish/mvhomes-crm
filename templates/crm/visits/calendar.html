@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Site visits{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Site visit calendar</h1><p>{{ start|date:"d M" }} – {{ end|date:"d M Y" }} · {{ total }} visit{{ total|pluralize }}</p></div>
+  <div class="head-actions">
+    <a class="btn btn-secondary" href="?week={{ prev|date:'Y-m-d' }}">‹ Previous week</a>
+    <a class="btn btn-secondary" href="?">This week</a>
+    <a class="btn btn-secondary" href="?week={{ next|date:'Y-m-d' }}">Next week ›</a>
+  </div>
+</div>
+<div class="cal">
+  {% for day in days %}
+  <div class="cal-day{% if day.date == today %} today{% endif %}">
+    <div class="cal-head"><span>{{ day.date|date:"D" }}</span><span class="muted">{{ day.date|date:"d M" }}</span></div>
+    <div class="cal-body">
+      {% for v in day.visits %}
+      <a class="visit v-{{ v.status }}" href="{% if v.status == 'scheduled' %}{% url 'visit_update' v.pk %}{% else %}{% url 'lead_detail' v.lead_id %}{% endif %}">
+        <strong>{{ v.scheduled_at|date:"h:i A" }}</strong> {{ v.lead.name }}
+        <div class="muted">{{ v.project }}</div>
+        <div class="muted">{{ v.executive|person }} · {{ v.get_status_display }}</div>
+      </a>
+      {% empty %}<span class="muted small">No visits</span>{% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

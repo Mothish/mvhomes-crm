@@ -1,0 +1,52 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Pipeline{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Pipeline</h1><p>Drag a card (or use <em>Move to…</em> on phones) to change its stage. Booked and Lost columns show the last {{ closed_days }} days.</p></div>
+  <div class="head-actions">
+    <span class="seg"><a href="{% url 'lead_list' %}?{{ request.GET.urlencode }}">List</a><a class="active" href="{% url 'lead_board' %}?{{ request.GET.urlencode }}">Board</a></span>
+  </div>
+</div>
+{% include "crm/_filters.html" with hide_stage=True %}
+
+<div class="board" id="board">
+  {% for col in columns %}
+  <div class="col" data-stage="{{ col.key }}" style="--cc: var(--c-{{ col.key|stage_color }})">
+    <div class="col-head stage-{{ col.key|stage_color }}"><span>{{ col.label }}</span><span class="count" data-count>{{ col.leads|length }}</span></div>
+    <div class="col-body">
+      {% for lead in col.leads %}
+      <div class="lead-card{% if lead.is_overdue %} overdue{% endif %}" draggable="true" data-id="{{ lead.pk }}" data-url="{% url 'lead_stage' lead.pk %}">
+        <div class="lc-top">
+          <a class="name" href="{% url 'lead_detail' lead.pk %}">{{ lead.name }}</a>
+          <span class="temp temp-{{ lead.temperature }}" title="{{ lead.get_temperature_display }}"></span>
+        </div>
+        <div class="meta">{{ lead.project.name|default:"No project" }}{% if lead.property_type %} · {{ lead.get_property_type_display }}{% endif %}</div>
+        <div class="meta">{{ lead.get_source_display }}{% if lead.budget %} · {{ lead.get_budget_display }}{% endif %}</div>
+        <div class="lc-foot">
+          <span class="who"><span class="avatar avatar-sm">{{ lead.owner|initials }}</span></span>
+          {% if lead.is_open and lead.next_followup %}<span class="{% if lead.is_overdue %}text-red{% else %}muted{% endif %}">⏰ {{ lead.next_followup|date:"d M" }}</span>{% endif %}
+        </div>
+        {% if lead.stage != 'booked' %}
+        <select class="input move-select" aria-label="Move {{ lead.name }} to stage">
+          <option value="">Move to…</option>
+          {% for key, label in stages %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="modal" id="lost-modal">
+  <form class="modal-box" id="lost-form">
+    <h3>Why was this lead lost?</h3>
+    <div class="field"><label>Reason <span class="req">*</span></label>
+      <select class="input" name="reason" required><option value="">Select a reason</option>{% for k, v in lost_reasons %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    <div class="field" style="margin-top:10px"><label>Details</label><input class="input" name="note" maxlength="200" placeholder="Optional"></div>
+    <div class="form-actions"><button type="button" class="btn btn-secondary" data-cancel>Cancel</button><button class="btn btn-danger" type="submit">Mark as lost</button></div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}<script>CRM.initBoard();</script>{% endblock %}

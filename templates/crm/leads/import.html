@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Import leads{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><a class="crumb" href="{% url 'lead_list' %}">← Leads</a><h1>Import leads from Excel</h1>
+    <p>New leads are auto-assigned round-robin. Existing phone numbers are recorded as re-enquiries, never duplicated.</p></div>
+  <div class="head-actions"><a class="btn btn-secondary" href="{% url 'lead_import_template' %}">Download template</a></div>
+</div>
+<div class="grid-main">
+  <form method="post" enctype="multipart/form-data" class="card card-body" novalidate>{% csrf_token %}
+    {% include "crm/_form.html" %}
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Upload &amp; import</button></div>
+  </form>
+  <div class="card card-body">
+    <h3 style="margin-top:0">Columns</h3>
+    <p class="small muted">{{ columns|join:", " }}</p>
+    <p class="small"><strong>Name</strong> and <strong>Phone</strong> are required. Source, budget and property type accept the labels shown in the app (e.g. "99acres", "3 BHK").</p>
+  </div>
+</div>
+{% if result %}
+<section class="card" style="margin-top:18px">
+  <div class="card-header"><h2>Result</h2><span><span class="badge b-green">{{ result.created }} new</span> <span class="badge b-orange">{{ result.duplicates }} re-enquiries</span> <span class="badge b-red">{{ result.errors|length }} errors</span></span></div>
+  {% if result.errors %}
+  <div class="table-wrap"><table class="table"><thead><tr><th>Row</th><th>Name</th><th>Problem</th></tr></thead>
+    <tbody>{% for row, name, msg in result.errors %}<tr><td>{{ row }}</td><td>{{ name }}</td><td class="text-red">{{ msg }}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<div class="empty">All rows processed. <a href="{% url 'lead_list' %}">View leads →</a></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

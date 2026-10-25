@@ -1,0 +1,107 @@
+{% extends "base.html" %}{% load crm_tags static %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{% if is_leader %}Team dashboard{% else %}Sales dashboard{% endif %}</h1><p>{{ start|date:"d M" }} – {{ end|date:"d M Y" }}</p></div>
+  <span class="seg">{% for k, label in periods %}<a class="{% if period == k %}active{% endif %}" href="?period={{ k }}">{{ label }}</a>{% endfor %}</span>
+</div>
+
+<div class="kpis">
+  <div class="kpi kpi-hero">
+    <span class="kpi-label">Booking value</span><span class="kpi-value">{{ kpi.value|crore }}</span>
+    <span class="kpi-sub">{{ kpi.bookings }} booking{{ kpi.bookings|pluralize }}{% if kpi.bookings_pct is not None %} · {% if kpi.bookings_pct >= 0 %}▲{% else %}▼{% endif %} {{ kpi.bookings_pct|stringformat:"d"|cut:"-" }}% vs previous{% endif %}</span>
+  </div>
+  <div class="kpi" style="--kc:#6366f1"><span class="kpi-label">New leads</span><span class="kpi-value">{{ kpi.leads }}</span>
+    <span class="kpi-sub">{% if kpi.leads_pct is not None %}<span class="{% if kpi.leads_pct >= 0 %}text-green{% else %}text-red{% endif %}">{% if kpi.leads_pct >= 0 %}▲{% else %}▼{% endif %} {{ kpi.leads_pct|stringformat:"d"|cut:"-" }}%</span> vs previous period{% else %}no earlier data{% endif %}</span></div>
+  <div class="kpi" style="--kc:#f97316"><span class="kpi-label">Site visits done</span><span class="kpi-value">{{ kpi.visits }}</span><span class="kpi-sub">{{ kpi.visits|pct:kpi.leads }}% of new leads</span></div>
+  <div class="kpi" style="--kc:#16a34a"><span class="kpi-label">Lead → booking</span><span class="kpi-value">{{ kpi.conversion }}%</span><span class="kpi-sub">of leads received this period</span></div>
+  <div class="kpi" style="--kc:#0ea5e9"><span class="kpi-label">Avg first response</span><span class="kpi-value">{{ kpi.response|minutes }}</span><span class="kpi-sub">from enquiry to first call</span></div>
+</div>
+
+<div class="alerts">
+  <a class="alert-tile tile-red" href="{% url 'lead_list' %}?due=untouched"><strong>{{ alerts.waiting }}</strong><span>leads waiting 2h+ for a first call</span></a>
+  <a class="alert-tile tile-amber" href="{% url 'lead_list' %}?due=overdue"><strong>{{ alerts.overdue }}</strong><span>overdue follow-ups across the team</span></a>
+  <a class="alert-tile tile-blue" href="{% url 'lead_list' %}?stage=open&temp=hot"><strong>{{ alerts.hot }}</strong><span>hot leads in the pipeline</span></a>
+  {% if is_mgmt %}<a class="alert-tile tile-green" href="{% url 'lead_list' %}?owner=none"><strong>{{ alerts.unassigned }}</strong><span>open leads with no owner</span></a>
+  <a class="alert-tile tile-blue" href="{% url 'website_form' %}"><strong>{{ alerts.web_today }}</strong><span>website enquiries today · open form →</span></a>{% endif %}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-header"><h2>Conversion funnel</h2><span class="muted small">leads received in this period</span></div>
+    <div class="card-body funnel">
+      {% for s in funnel %}
+      <div class="funnel-row"><span class="small"><strong>{{ s.label }}</strong></span>
+        <div class="funnel-bar"><span style="width:{{ s.pct }}%">{{ s.count }}</span></div>
+        <span class="small muted num">{{ s.pct }}%</span></div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-header"><h2>Leads by source</h2><a class="small" href="{% url 'reports' %}">Source ROI →</a></div>
+    <div class="card-body"><div class="chart-box chart-sm"><canvas id="c-source"></canvas></div></div>
+  </section>
+  <section class="card span-2">
+    <div class="card-header"><h2>Daily leads &amp; bookings</h2></div>
+    <div class="card-body"><div class="chart-box chart-sm"><canvas id="c-trend"></canvas></div></div>
+  </section>
+  <section class="card">
+    <div class="card-header"><h2>Leads by project</h2></div>
+    <div class="card-body"><div class="chart-box chart-sm"><canvas id="c-project"></canvas></div></div>
+  </section>
+  <section class="card">
+    <div class="card-header"><h2>Leaderboard</h2><a class="small" href="{% url 'targets' %}">Targets →</a></div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>#</th><th>Executive</th><th class="num">Visits</th><th class="num">Bookings</th><th class="num">Value</th></tr></thead>
+      <tbody>{% for r in team|slice:":6" %}<tr>
+        <td><span class="rank rank-{{ forloop.counter }}">{{ forloop.counter }}</span></td>
+        <td><div class="who"><span class="avatar avatar-sm">{{ r.user|initials }}</span>{{ r.user|person }}</div></td>
+        <td class="num">{{ r.visits }}</td><td class="num"><strong>{{ r.bookings }}</strong></td><td class="num">{{ r.value|crore }}</td></tr>
+      {% empty %}<tr><td colspan="5" class="empty">No team members.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="card span-2">
+    <div class="card-header"><h2>Team discipline</h2><span class="muted small">Who needs a nudge today</span></div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Executive</th><th class="num">Open leads</th><th class="num">Overdue</th><th class="num">New this period</th><th class="num">Avg response</th><th class="num hide-sm">Calls</th><th>Month target (visits / bookings)</th></tr></thead>
+      <tbody>{% for r in team %}<tr>
+        <td><div class="who"><span class="avatar avatar-sm">{{ r.user|initials }}</span><div>{{ r.user|person }}<div class="muted small">{{ r.user.profile.team.name|default:"" }}</div></div></div></td>
+        <td class="num">{{ r.open }}</td>
+        <td class="num">{% if r.overdue %}<a class="text-red" href="{% url 'lead_list' %}?owner={{ r.user.pk }}&due=overdue">{{ r.overdue }}</a>{% else %}<span class="text-green">0</span>{% endif %}</td>
+        <td class="num">{{ r.new }}</td>
+        <td class="num {% if r.response and r.response > 120 %}text-red{% endif %}">{{ r.response|minutes }}</td>
+        <td class="num hide-sm">{{ r.calls }}</td>
+        <td style="min-width:200px">{% if r.target %}
+          <div class="small">{{ r.month_visits }}/{{ r.target.site_visits }} visits · {{ r.month_bookings }}/{{ r.target.bookings }} bookings</div>
+          <div class="progress{% if r.month_bookings >= r.target.bookings %} done{% endif %}"><span style="width:{% widthratio r.month_bookings r.target.bookings 100 %}%;max-width:100%"></span></div>
+        {% else %}<span class="muted small">No target set</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{{ charts|json_script:"chart-data" }}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+<script>
+(function () {
+  var d = JSON.parse(document.getElementById('chart-data').textContent);
+  var palette = ['#1f3a68', '#c99a3b', '#4a6fa8', '#e8c87a', '#0ea5e9', '#94a3b8', '#152a4d', '#16a34a', '#f97316', '#ec4899'];
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  new Chart(document.getElementById('c-source'), {type: 'doughnut',
+    data: {labels: d.source.labels, datasets: [{data: d.source.values, backgroundColor: palette, borderWidth: 2}]},
+    options: {maintainAspectRatio: false, cutout: '60%', plugins: {legend: {position: 'right'}}}});
+  new Chart(document.getElementById('c-trend'), {type: 'bar',
+    data: {labels: d.trend.labels, datasets: [
+      {type: 'line', label: 'Leads', data: d.trend.leads, borderColor: '#1f3a68', backgroundColor: 'rgba(31,58,104,.10)', fill: true, tension: .35, pointRadius: 0, yAxisID: 'y'},
+      {label: 'Bookings', data: d.trend.bookings, backgroundColor: '#c99a3b', borderRadius: 4, yAxisID: 'y1'}]},
+    options: {maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+      scales: {y: {beginAtZero: true}, y1: {beginAtZero: true, position: 'right', grid: {drawOnChartArea: false}, ticks: {precision: 0}}, x: {grid: {display: false}, ticks: {maxTicksLimit: 12}}}}});
+  new Chart(document.getElementById('c-project'), {type: 'bar',
+    data: {labels: d.project.labels, datasets: [
+      {label: 'Leads', data: d.project.leads, backgroundColor: '#c9d6ea', borderRadius: 6},
+      {label: 'Booked', data: d.project.booked, backgroundColor: '#1f3a68', borderRadius: 6}]},
+    options: {maintainAspectRatio: false, indexAxis: 'y', scales: {x: {beginAtZero: true}}}});
+})();
+</script>
+{% endblock %}
