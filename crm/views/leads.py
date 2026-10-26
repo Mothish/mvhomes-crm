@@ -11,9 +11,9 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
 
 from ..access import (
+    post_only,
     ADMIN, LEADER, MANAGER, MGMT, SALES_ROLES, assignable_users, can_view_lead, get_role, role_required,
     visible_leads, visible_users,
 )
@@ -195,7 +195,7 @@ def lead_edit(request, pk):
 
 
 @role_required(ADMIN)
-@require_POST
+@post_only
 def lead_delete(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     audit(request.user, "delete", lead, f"Deleted lead {lead.name} ({lead.full_phone})")
@@ -205,7 +205,7 @@ def lead_delete(request, pk):
 
 
 @role_required(*SALES_ROLES)
-@require_POST
+@post_only
 def lead_log_activity(request, pk):
     lead = get_visible_lead(request, pk)
     form = ActivityForm(request.POST)
@@ -224,7 +224,7 @@ def lead_log_activity(request, pk):
 
 
 @role_required(*SALES_ROLES)
-@require_POST
+@post_only
 def lead_stage(request, pk):
     lead = get_visible_lead(request, pk)
     stage = request.POST.get("stage", "")
@@ -258,7 +258,7 @@ def lead_stage(request, pk):
 
 
 @role_required(ADMIN, MANAGER, LEADER)
-@require_POST
+@post_only
 def lead_reassign(request, pk):
     lead = get_visible_lead(request, pk)
     form = ReassignForm(request.POST, user=request.user)
@@ -272,7 +272,7 @@ def lead_reassign(request, pk):
 
 
 @role_required(ADMIN, MANAGER, LEADER)
-@require_POST
+@post_only
 def lead_bulk_assign(request):
     to = assignable_users(request.user).filter(pk=request.POST.get("to_user")).first()
     ids = request.POST.getlist("ids")

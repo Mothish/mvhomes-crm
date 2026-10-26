@@ -3,9 +3,8 @@ from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
 
-from ..access import ADMIN, role_required
+from ..access import ADMIN, post_only, role_required
 from ..forms import ProjectForm, TeamForm, TransferForm, UserForm
 from ..models import AuditLog, Lead, Project, Team
 from ..services import audit, transfer_leads
@@ -62,7 +61,7 @@ def user_transfer(request, pk):
 
 
 @role_required(ADMIN)
-@require_POST
+@post_only
 def team_create(request):
     form = TeamForm(request.POST)
     if form.is_valid():

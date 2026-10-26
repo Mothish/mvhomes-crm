@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
 
 from .locale_data import CURRENCY_CHOICES, current_currency
 from .models import Lead, Notification, Profile
@@ -11,6 +12,21 @@ from .models import Lead, Notification, Profile
 ADMIN, MANAGER, LEADER, EXECUTIVE = Profile.ADMIN, Profile.MANAGER, Profile.LEADER, Profile.EXECUTIVE
 MGMT = (ADMIN, MANAGER)
 SALES_ROLES = (ADMIN, MANAGER, LEADER, EXECUTIVE)
+
+
+def post_only(view):
+    """Like require_POST, but a plain visit (e.g. the redirect after re-login) lands on a real page, not a 405."""
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if request.method == "POST":
+            return view(request, *args, **kwargs)
+        if request.path.startswith("/leads/"):
+            pk = kwargs.get("pk")
+            if pk and Lead.objects.filter(pk=pk).exists():
+                return redirect("lead_detail", pk=pk)
+            return redirect("lead_list")
+        return redirect("home")
+    return wrapper
 
 
 def get_role(user):

@@ -8,9 +8,8 @@ from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
 
-from ..access import ADMIN, SALES_ROLES, can_view_lead, role_required, visible_leads
+from ..access import ADMIN, SALES_ROLES, can_view_lead, post_only, role_required, visible_leads
 from ..forms import BookingForm, SiteVisitForm, VisitResultForm
 from ..locale_data import CURRENCIES, format_money
 from ..models import Booking, Lead, Notification, Project, SiteVisit
@@ -156,7 +155,7 @@ def booking_list(request):
 
 
 @role_required(ADMIN)
-@require_POST
+@post_only
 def booking_cancel(request, pk):
     booking = get_object_or_404(Booking.objects.select_related("lead"), pk=pk)
     lead = booking.lead
@@ -185,13 +184,13 @@ def notification_open(request, pk):
 
 
 @role_required(*SALES_ROLES)
-@require_POST
+@post_only
 def notifications_read_all(request):
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
     return redirect("notifications")
 
 
-@require_POST
+@post_only
 def set_currency(request):
     code = request.POST.get("currency")
     if code in CURRENCIES:
