@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{% endblock %} · {{ company }}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ asset_version }}">
 </head>
 <body>{% block public %}{% endblock %}</body>
 </html>

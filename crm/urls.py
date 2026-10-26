@@ -30,6 +30,7 @@ urlpatterns = [
     path("notifications/", work.notifications, name="notifications"),
     path("notifications/<int:pk>/", work.notification_open, name="notification_open"),
     path("notifications/read-all/", work.notifications_read_all, name="notifications_read_all"),
+    path("currency/", work.set_currency, name="set_currency"),
     path("reports/", insights.reports, name="reports"),
     path("reports/ad-spend/", insights.ad_spend, name="ad_spend"),
     path("targets/", insights.targets, name="targets"),

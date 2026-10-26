@@ -24,14 +24,14 @@
 
 {% if tab == 'sources' %}
 {% if best or worst %}<p class="insight">
-  {% if best %}💡 <strong>{{ best.label }}</strong> is your most efficient channel at <strong>{{ best.cpb|inr }}</strong> per booking ({{ best.bookings }} booking{{ best.bookings|pluralize }} from {{ best.leads }} leads). {% endif %}
-  {% if worst %}⚠️ <strong>{{ worst.label }}</strong> spent <strong>{{ worst.spend|inr }}</strong> with no bookings from this period's leads yet.{% endif %}
+  {% if best %}💡 <strong>{{ best.label }}</strong> is your most efficient channel at <strong>{{ best.cpb|money }}</strong> per booking ({{ best.bookings }} booking{{ best.bookings|pluralize }} from {{ best.leads }} leads). {% endif %}
+  {% if worst %}⚠️ <strong>{{ worst.label }}</strong> spent <strong>{{ worst.spend|money }}</strong> with no bookings from this period's leads yet.{% endif %}
 </p>{% endif %}
 <div class="kpis">
   <div class="kpi"><span class="kpi-label">Leads</span><span class="kpi-value">{{ totals.leads }}</span></div>
   <div class="kpi" style="--kc:#f97316"><span class="kpi-label">Site visits</span><span class="kpi-value">{{ totals.visits }}</span></div>
-  <div class="kpi" style="--kc:#16a34a"><span class="kpi-label">Bookings</span><span class="kpi-value">{{ totals.bookings }}</span><span class="kpi-sub">{{ totals.value|crore }}</span></div>
-  <div class="kpi" style="--kc:#ef4444"><span class="kpi-label">Ad spend</span><span class="kpi-value">{{ totals.spend|crore }}</span><span class="kpi-sub">CPL {{ totals.cpl|inr|default:"—" }} · CPB {{ totals.cpb|inr|default:"—" }}</span></div>
+  <div class="kpi" style="--kc:#16a34a"><span class="kpi-label">Bookings</span><span class="kpi-value">{{ totals.bookings }}</span><span class="kpi-sub">{{ totals.value|money_short }}</span></div>
+  <div class="kpi" style="--kc:#ef4444"><span class="kpi-label">Ad spend</span><span class="kpi-value">{{ totals.spend|money_short }}</span><span class="kpi-sub">CPL {{ totals.cpl|money|default:"—" }} · CPB {{ totals.cpb|money|default:"—" }}</span></div>
 </div>
 <div class="grid-2">
   <section class="card span-2"><div class="card-header"><h2>Leads → visits → bookings by source</h2></div>
@@ -42,9 +42,9 @@
       <tbody>{% for r in rows %}{% if r.leads or r.spend %}<tr>
         <td><strong>{{ r.label }}</strong>{% if best and r.key == best.key %} <span class="badge b-green">Best</span>{% endif %}</td>
         <td class="num">{{ r.leads }}</td><td class="num">{{ r.contacted }}</td><td class="num">{{ r.visits }}</td><td class="num"><strong>{{ r.bookings }}</strong></td>
-        <td class="num">{{ r.conversion }}%</td><td class="num">{{ r.value|crore }}</td>
-        <td class="num">{% if r.spend %}{{ r.spend|inr }}{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td class="num">{{ r.cpl|inr|default:"—" }}</td><td class="num">{{ r.cpb|inr|default:"—" }}</td>
+        <td class="num">{{ r.conversion }}%</td><td class="num">{{ r.value|money_short }}</td>
+        <td class="num">{% if r.spend %}{{ r.spend|money }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num">{{ r.cpl|money|default:"—" }}</td><td class="num">{{ r.cpb|money|default:"—" }}</td>
         <td class="num">{% if r.roi %}<span class="{% if r.roi >= 10 %}text-green{% endif %}">{{ r.roi }}×</span>{% else %}—{% endif %}</td>
       </tr>{% endif %}{% endfor %}</tbody>
     </table></div></section>
@@ -60,7 +60,7 @@
       <tbody>{% for r in rows %}<tr>
         <td><div class="who"><span class="rank rank-{{ forloop.counter }}">{{ forloop.counter }}</span><span class="avatar avatar-sm">{{ r.user|initials }}</span>{{ r.user|person }}</div></td>
         <td class="num">{{ r.new }}</td><td class="num">{{ r.calls }}</td><td class="num">{{ r.whatsapp }}</td><td class="num">{{ r.visits }}</td>
-        <td class="num"><strong>{{ r.bookings }}</strong></td><td class="num">{{ r.value|crore }}</td><td class="num">{{ r.conversion }}%</td>
+        <td class="num"><strong>{{ r.bookings }}</strong></td><td class="num">{{ r.value|money_short }}</td><td class="num">{{ r.conversion }}%</td>
         <td class="num {% if r.response and r.response > 120 %}text-red{% endif %}">{{ r.response|minutes }}</td>
         <td class="num {% if r.overdue %}text-red{% endif %}">{{ r.overdue }}</td></tr>{% endfor %}</tbody>
     </table></div></section>
@@ -79,7 +79,7 @@
     <div class="table-wrap"><table class="table"><tbody>{% for s in by_stage %}<tr><td>{{ s.label }}</td><td class="num"><strong>{{ s.count }}</strong></td></tr>{% endfor %}</tbody></table></div></section>
   <section class="card"><div class="card-header"><h2>Recently lost</h2></div>
     <div class="table-wrap"><table class="table"><tbody>{% for lead in recent %}<tr>
-      <td><a href="{% url 'lead_detail' lead.pk %}">{{ lead.name }}</a><div class="muted small">{{ lead.project.name|default:"" }} · {{ lead.owner|person }}</div></td>
+      <td><a href="{% url 'lead_detail' lead.pk %}">{{ lead.name }}</a><div class="muted small">{{ lead.project_label|default:"" }} · {{ lead.owner|person }}</div></td>
       <td><span class="badge b-gray">{{ lead.get_lost_reason_display }}</span></td><td class="small muted">{{ lead.stage_changed_at|date:"d M" }}</td></tr>
       {% empty %}<tr><td class="empty">None.</td></tr>{% endfor %}</tbody></table></div></section>
 </div>

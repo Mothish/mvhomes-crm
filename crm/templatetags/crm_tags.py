@@ -1,6 +1,6 @@
-from decimal import Decimal, InvalidOperation
-
 from django import template
+
+from ..locale_data import format_money, format_money_short
 
 register = template.Library()
 
@@ -17,46 +17,16 @@ STAGE_COLORS = {
 TEMP_COLORS = {"hot": "red", "warm": "amber", "cold": "sky"}
 
 
-def _decimal(value):
-    if value is None or value == "":
-        return None
-    try:
-        return Decimal(value)
-    except (InvalidOperation, TypeError, ValueError):
-        return None
+@register.filter
+def money(value):
+    """Base-currency amount shown in the user's chosen currency, e.g. QAR 1,250,000."""
+    return format_money(value)
 
 
 @register.filter
-def inr(value):
-    """Indian grouping: 1234567 -> ₹12,34,567"""
-    amount = _decimal(value)
-    if amount is None:
-        return ""
-    sign = "-" if amount < 0 else ""
-    whole = f"{abs(amount):.0f}"
-    if len(whole) > 3:
-        head, tail = whole[:-3], whole[-3:]
-        groups = []
-        while len(head) > 2:
-            groups.insert(0, head[-2:])
-            head = head[:-2]
-        if head:
-            groups.insert(0, head)
-        whole = ",".join(groups + [tail])
-    return f"{sign}₹{whole}"
-
-
-@register.filter
-def crore(value):
-    """Compact real-estate format: 8500000 -> ₹85 L, 12500000 -> ₹1.25 Cr"""
-    amount = _decimal(value)
-    if amount is None:
-        return "₹0"
-    if abs(amount) >= 10_000_000:
-        return f"₹{amount / 10_000_000:.2f} Cr".replace(".00 ", " ")
-    if abs(amount) >= 100_000:
-        return f"₹{amount / 100_000:.1f} L".replace(".0 ", " ")
-    return inr(amount)
+def money_short(value):
+    """Compact form for KPIs and cards, e.g. QAR 1.25M / $343K / ₹2.86 Cr."""
+    return format_money_short(value)
 
 
 @register.filter
@@ -99,8 +69,8 @@ def minutes(value):
 
 @register.filter
 def wa_number(phone):
-    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
-    return f"91{digits}" if len(digits) == 10 else digits
+    """wa.me needs the full international number as digits only, e.g. '+974 5512 3456' -> '97455123456'."""
+    return "".join(ch for ch in str(phone or "") if ch.isdigit())
 
 
 @register.filter

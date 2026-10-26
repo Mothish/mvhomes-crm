@@ -8,7 +8,7 @@
 
 <div class="kpis">
   <div class="kpi kpi-hero">
-    <span class="kpi-label">Booking value</span><span class="kpi-value">{{ kpi.value|crore }}</span>
+    <span class="kpi-label">Booking value</span><span class="kpi-value">{{ kpi.value|money_short }}</span>
     <span class="kpi-sub">{{ kpi.bookings }} booking{{ kpi.bookings|pluralize }}{% if kpi.bookings_pct is not None %} · {% if kpi.bookings_pct >= 0 %}▲{% else %}▼{% endif %} {{ kpi.bookings_pct|stringformat:"d"|cut:"-" }}% vs previous{% endif %}</span>
   </div>
   <div class="kpi" style="--kc:#6366f1"><span class="kpi-label">New leads</span><span class="kpi-value">{{ kpi.leads }}</span>
@@ -56,7 +56,7 @@
       <tbody>{% for r in team|slice:":6" %}<tr>
         <td><span class="rank rank-{{ forloop.counter }}">{{ forloop.counter }}</span></td>
         <td><div class="who"><span class="avatar avatar-sm">{{ r.user|initials }}</span>{{ r.user|person }}</div></td>
-        <td class="num">{{ r.visits }}</td><td class="num"><strong>{{ r.bookings }}</strong></td><td class="num">{{ r.value|crore }}</td></tr>
+        <td class="num">{{ r.visits }}</td><td class="num"><strong>{{ r.bookings }}</strong></td><td class="num">{{ r.value|money_short }}</td></tr>
       {% empty %}<tr><td colspan="5" class="empty">No team members.</td></tr>{% endfor %}</tbody>
     </table></div>
   </section>

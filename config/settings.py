@@ -43,6 +43,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "crm.middleware.CurrencyMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -82,8 +83,8 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-LANGUAGE_CODE = "en-in"
-TIME_ZONE = "Asia/Kolkata"
+LANGUAGE_CODE = "en-gb"
+TIME_ZONE = "Asia/Qatar"
 USE_I18N = True
 USE_TZ = True
 
@@ -116,8 +117,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 BRAND_MARK = "MV"
 BRAND_WORD = "Homes"
 COMPANY_NAME = f"{BRAND_MARK} {BRAND_WORD}"
-COMPANY_TAGLINE = "Crafted homes across Chennai"
-COMPANY_PHONE = "+91 44 4000 1234"
+COMPANY_TAGLINE = "Premium homes across Qatar"
+COMPANY_PHONE = "+974 4400 1234"
 COMPANY_WEBSITE = "mvhomes.example"
+DEFAULT_CURRENCY = "QAR"
 BACKUP_DIR = BASE_DIR / "backups"
 BACKUP_KEEP = 14

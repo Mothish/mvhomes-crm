@@ -7,7 +7,7 @@
   {% for p in items %}
   <a class="card card-body" href="{% url 'project_edit' p.pk %}" style="color:inherit;text-decoration:none{% if not p.is_active %};opacity:.55{% endif %}">
     <div style="display:flex;justify-content:space-between;gap:8px"><h3 style="margin:0">{{ p.name }}</h3>{% if p.is_active %}<span class="badge b-green">Selling</span>{% else %}<span class="badge b-gray">Inactive</span>{% endif %}</div>
-    <p class="muted" style="margin:4px 0 12px">📍 {{ p.location }} · {{ p.property_types }} · ₹{{ p.price_from|floatformat:0 }} L – ₹{{ p.price_to|floatformat:0 }} L</p>
+    <p class="muted" style="margin:4px 0 12px">📍 {{ p.location }} · {{ p.property_types }} · {{ p.price_from|money_short }} – {{ p.price_to|money_short }}</p>
     <div style="display:flex;gap:18px"><div><div class="kpi-label">Leads</div><strong style="font-size:20px">{{ p.lead_count }}</strong></div>
       <div><div class="kpi-label">Bookings</div><strong style="font-size:20px">{{ p.booking_count }}</strong></div>
       <div><div class="kpi-label">Conversion</div><strong style="font-size:20px">{{ p.booking_count|pct:p.lead_count }}%</strong></div></div>

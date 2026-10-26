@@ -8,7 +8,7 @@
 
 <div class="kpis">
   <div class="kpi kpi-hero"><span class="kpi-label">My bookings this month</span><span class="kpi-value">{{ row.month_bookings }}</span>
-    <span class="kpi-sub">{{ row.value|crore }} value{% if my_rank %} · rank #{{ my_rank }} of {{ team_size }}{% endif %}</span></div>
+    <span class="kpi-sub">{{ row.value|money_short }} value{% if my_rank %} · rank #{{ my_rank }} of {{ team_size }}{% endif %}</span></div>
   <div class="kpi" style="--kc:#6366f1"><span class="kpi-label">Open leads</span><span class="kpi-value">{{ row.open }}</span><span class="kpi-sub">{{ untouched }} never contacted</span></div>
   <div class="kpi" style="--kc:#ef4444"><span class="kpi-label">Overdue follow-ups</span><span class="kpi-value {% if row.overdue %}text-red{% endif %}">{{ row.overdue }}</span><span class="kpi-sub">{{ due_today }} due today</span></div>
   <div class="kpi" style="--kc:#f97316"><span class="kpi-label">Site visits this month</span><span class="kpi-value">{{ row.month_visits }}</span><span class="kpi-sub">{{ row.calls }} calls logged</span></div>
@@ -37,9 +37,9 @@
     <div class="card-header"><h2>Follow-ups due</h2><a class="small" href="{% url 'my_day' %}">All →</a></div>
     {% if agenda %}<div class="table-wrap"><table class="table"><tbody>
       {% for lead in agenda %}<tr class="{% if lead.is_overdue %}row-overdue{% endif %}">
-        <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a><div class="muted small">{{ lead.project.name|default:"" }} · {{ lead.get_stage_display }}</div></td>
+        <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a><div class="muted small">{{ lead.project_label|default:"" }} · {{ lead.get_stage_display }}</div></td>
         <td class="small {% if lead.is_overdue %}text-red{% endif %}">{{ lead.next_followup|date:"d M, h:i A" }}</td>
-        <td class="actions"><a class="btn btn-secondary btn-sm" href="tel:{{ lead.phone }}">Call</a></td></tr>{% endfor %}
+        <td class="actions"><a class="btn btn-secondary btn-sm" href="tel:{{ lead.tel }}">Call</a></td></tr>{% endfor %}
     </tbody></table></div>{% else %}<div class="empty">Nothing due. Great job!</div>{% endif %}
   </section>
   <section class="card">
@@ -51,7 +51,7 @@
   <section class="card span-2">
     <div class="card-header"><h2>🔥 Hot leads</h2></div>
     {% if hot %}<div class="table-wrap"><table class="table"><tbody>{% for lead in hot %}<tr>
-      <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a></td><td>{{ lead.project.name|default:"—" }}</td>
+      <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a></td><td>{{ lead.project_label|default:"—" }}</td>
       <td><span class="badge b-{{ lead.stage|stage_color }}">{{ lead.get_stage_display }}</span></td>
       <td class="actions"><a class="btn btn-wa btn-sm" href="{% url 'lead_whatsapp' lead.pk 'followup' %}" target="_blank" rel="noopener">WhatsApp</a></td></tr>{% endfor %}</tbody></table></div>
     {% else %}<div class="empty">No hot leads right now.</div>{% endif %}

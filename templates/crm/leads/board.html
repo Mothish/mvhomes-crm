@@ -20,8 +20,8 @@
           <a class="name" href="{% url 'lead_detail' lead.pk %}">{{ lead.name }}</a>
           <span class="temp temp-{{ lead.temperature }}" title="{{ lead.get_temperature_display }}"></span>
         </div>
-        <div class="meta">{{ lead.project.name|default:"No project" }}{% if lead.property_type %} · {{ lead.get_property_type_display }}{% endif %}</div>
-        <div class="meta">{{ lead.get_source_display }}{% if lead.budget %} · {{ lead.get_budget_display }}{% endif %}</div>
+        <div class="meta">{{ lead.project_label|default:"No project" }}{% if lead.property_type %} · {{ lead.get_property_type_display }}{% endif %}</div>
+        <div class="meta">{{ lead.get_source_display }}{% if lead.budget_amount %} · {{ lead.budget_amount|money_short }}{% endif %}</div>
         <div class="lc-foot">
           <span class="who"><span class="avatar avatar-sm">{{ lead.owner|initials }}</span></span>
           {% if lead.is_open and lead.next_followup %}<span class="{% if lead.is_overdue %}text-red{% else %}muted{% endif %}">⏰ {{ lead.next_followup|date:"d M" }}</span>{% endif %}
@@ -37,6 +37,11 @@
     </div>
   </div>
   {% endfor %}
+</div>
+
+<div class="drop-bar" id="drop-bar" aria-hidden="true">
+  <span class="drop-bar-hint">Drop on any stage</span>
+  {% for col in columns %}<div class="drop-chip" data-stage="{{ col.key }}" style="--cc: var(--c-{{ col.key|stage_color }})">{{ col.label }}</div>{% endfor %}
 </div>
 
 <div class="modal" id="lost-modal">

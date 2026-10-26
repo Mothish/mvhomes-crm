@@ -1,5 +1,4 @@
-import random
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -14,63 +13,59 @@ from crm.models import (
 )
 
 PASSWORD = "Demo@1234"
-STAFF = [
-    # username, first, last, role, team, response-minutes, closing skill
-    ("karthik", "Karthik", "Raman", Profile.ADMIN, None, None, None),
-    ("meera", "Meera", "Krishnan", Profile.MANAGER, None, None, None),
-    ("arun", "Arun", "Prakash", Profile.LEADER, "Team Velachery", None, None),
-    ("sneha", "Sneha", "Iyer", Profile.LEADER, "Team OMR", None, None),
-    ("divya", "Divya", "Subramanian", Profile.EXECUTIVE, "Team Velachery", 12, 1.45),
-    ("rahul", "Rahul", "Menon", Profile.EXECUTIVE, "Team Velachery", 25, 1.1),
-    ("priya", "Priya", "Natarajan", Profile.EXECUTIVE, "Team Velachery", 50, 0.9),
-    ("vignesh", "Vignesh", "Kumar", Profile.EXECUTIVE, "Team Velachery", 95, 0.7),
-    ("sanjay", "Sanjay", "Reddy", Profile.EXECUTIVE, "Team OMR", 15, 1.3),
-    ("kavitha", "Kavitha", "Rajan", Profile.EXECUTIVE, "Team OMR", 30, 1.0),
-    ("manoj", "Manoj", "Pillai", Profile.EXECUTIVE, "Team OMR", 170, 0.6),
-    ("lakshmi", "Lakshmi", "Venkat", Profile.EXECUTIVE, "Team OMR", 60, 0.9),
+STAFF = [  # username, first, last, role, team, first-response minutes
+    ("karthik", "Karthik", "Raman", Profile.ADMIN, None, None),
+    ("meera", "Meera", "Krishnan", Profile.MANAGER, None, None),
+    ("arun", "Arun", "Prakash", Profile.LEADER, "Team Lusail", None),
+    ("sneha", "Sneha", "Iyer", Profile.LEADER, "Team West Bay", None),
+    ("divya", "Divya", "Subramanian", Profile.EXECUTIVE, "Team Lusail", 12),
+    ("rahul", "Rahul", "Menon", Profile.EXECUTIVE, "Team Lusail", 35),
+    ("sanjay", "Sanjay", "Reddy", Profile.EXECUTIVE, "Team West Bay", 18),
+    ("kavitha", "Kavitha", "Rajan", Profile.EXECUTIVE, "Team West Bay", 55),
 ]
-PROJECTS = [
-    # name, location, types, from, to, team, weight, property types
-    ("MV Lakeview Residences", "Velachery, Chennai", "2 & 3 BHK", 75, 140, "Team Velachery", 30, ["2bhk", "3bhk"]),
-    ("MV Metro Heights", "Porur, Chennai", "2 & 3 BHK", 65, 120, "Team Velachery", 25, ["2bhk", "3bhk"]),
-    ("MV Greens", "Siruseri, OMR", "2 & 3 BHK", 55, 95, "Team OMR", 35, ["2bhk", "3bhk"]),
-    ("MV Royal Villas", "ECR, Chennai", "4 BHK Villas", 180, 320, "Team OMR", 10, ["villa", "4bhk"]),
+PROJECTS = [  # name, location, types, price from/to (QAR), team
+    ("MV Marina Residences", "Marina District, Lusail", "1-3 BR apartments", 1_150_000, 3_200_000, "Team Lusail"),
+    ("MV Pearl Towers", "Porto Arabia, The Pearl-Qatar", "1-3 BR & penthouses", 1_450_000, 5_800_000, "Team West Bay"),
+    ("MV West Bay Heights", "West Bay, Doha", "Studio - 2 BR apartments", 780_000, 2_100_000, "Team West Bay"),
+    ("MV Wakrah Villas", "Al Wukair, Al Wakrah", "4-5 BR villas & townhouses", 2_400_000, 4_900_000, "Team Lusail"),
 ]
-SOURCES = {  # weight, quality
-    "facebook": (25, 0.8), "google": (15, 0.9), "website": (12, 1.05), "99acres": (14, 0.95),
-    "magicbricks": (10, 0.9), "walk_in": (7, 1.35), "referral": (6, 1.45), "channel_partner": (6, 1.25),
-    "print": (3, 0.75), "other": (2, 0.85),
-}
-AD_SPEND = {"facebook": 180000, "google": 140000, "99acres": 85000, "magicbricks": 60000, "print": 55000,
-            "website": 25000, "channel_partner": 40000}
-STEP_P = {1: 0.88, 2: 0.56, 3: 0.52, 4: 0.8, 5: 0.56, 6: 0.42}
-LOST_BY_RANK = {
-    0: ["not_reachable", "not_reachable", "not_interested"],
-    1: ["not_interested", "not_reachable", "budget"],
-    2: ["budget", "location", "not_interested", "bought_elsewhere"],
-    3: ["location", "budget", "bought_elsewhere"],
-    4: ["budget", "bought_elsewhere", "loan_rejected", "location"],
-    5: ["bought_elsewhere", "budget", "loan_rejected", "other"],
-}
-FIRST = ["Ramesh", "Suresh", "Anitha", "Deepak", "Lavanya", "Gopal", "Harini", "Ashok", "Bhavani", "Chandru",
-         "Dinesh", "Geetha", "Hari", "Indira", "Jagan", "Kamala", "Mohan", "Nirmala", "Prakash", "Radha",
-         "Saravanan", "Shalini", "Senthil", "Tamil", "Uma", "Venkatesh", "Yamuna", "Arvind", "Bala", "Charu",
-         "Ganesh", "Janani", "Karthick", "Madhu", "Naveen", "Pooja", "Raghav", "Sowmya", "Thilak", "Vidya",
-         "Abdul", "Fathima", "Joseph", "Mary", "Rohit", "Neha", "Amit", "Sunita", "Rajesh", "Anjali"]
-LAST = ["Kumar", "Srinivasan", "Raman", "Iyer", "Pillai", "Reddy", "Nair", "Chandran", "Murugan", "Balaji",
-        "Sundaram", "Ganesan", "Rao", "Sharma", "Krishnan", "Mohan", "Rahman", "Thomas", "Gupta", "Joseph"]
-AREAS = ["Velachery", "Adyar", "Tambaram", "Porur", "Anna Nagar", "T. Nagar", "Sholinganallur", "Guindy",
-         "Medavakkam", "Pallikaranai", "Perungudi", "Mylapore", "Chromepet", "Bangalore", "Dubai (NRI)"]
-NOTES = {
-    "call": ["Discussed floor plans and pricing", "Asked about loan options", "Wants east-facing unit",
-             "Comparing with another builder", "Will discuss with family this weekend", "Asked for best price",
-             "Interested in higher floor", "Needs possession within 12 months"],
-    "whatsapp": ["Shared brochure and price sheet", "Sent location pin", "Shared payment plan", "Sent offer details"],
-}
+# name, dial, number, country, city, area, source, project#, type, budget QAR, stage, temp, lang, days ago, owner, lost reason
+LEADS = [
+    ("Ahmed Al-Kuwari", "+974", "55123401", "QA", "Doha", "Al Sadd", "propertyfinder", 1, "2br", 1_900_000, "sv_scheduled", "hot", "ar", 6, "divya", ""),
+    ("Fatima Al-Mannai", "+974", "66123402", "QA", "Lusail", "Fox Hills", "instagram", 0, "1br", 1_250_000, "contacted", "warm", "ar", 2, "rahul", ""),
+    ("Rajesh Nair", "+974", "33123403", "QA", "Doha", "Bin Mahmoud", "facebook", 2, "2br", 1_400_000, "interested", "warm", "en", 9, "sanjay", ""),
+    ("Sarah Thompson", "+44", "7700900404", "GB", "London", "Canary Wharf", "website", 1, "3br", 3_600_000, "negotiation", "hot", "en", 21, "kavitha", ""),
+    ("Mohammed Al-Marri", "+974", "55123405", "QA", "Al Wakrah", "Barwa City", "referral", 3, "villa", 3_800_000, "booked", "hot", "ar", 40, "divya", ""),
+    ("Priyanka Menon", "+91", "9840012306", "IN", "Kochi", "Kakkanad", "facebook", 2, "studio", 820_000, "new", "warm", "en", 0, "sanjay", ""),
+    ("Omar Haddad", "+971", "501234507", "AE", "Dubai", "Dubai Marina", "google", 0, "2br", 2_000_000, "sv_done", "hot", "en", 14, "rahul", ""),
+    ("Aisha Al-Sulaiti", "+974", "66123408", "QA", "Doha", "The Pearl-Qatar", "qatarliving", 1, "penthouse", 5_500_000, "interested", "warm", "ar", 11, "kavitha", ""),
+    ("John Mathew", "+974", "33123409", "QA", "Doha", "Old Airport", "walk_in", 2, "1br", 900_000, "booked", "hot", "en", 33, "sanjay", ""),
+    ("Khalid Al-Kubaisi", "+974", "55123410", "QA", "Al Rayyan", "Al Gharrafa", "broker", 3, "townhouse", 2_700_000, "lost", "cold", "ar", 45, "divya", "budget"),
+    ("Maria Santos", "+974", "66123411", "QA", "Doha", "Najma", "facebook", 2, "studio", 780_000, "lost", "cold", "en", 38, "sanjay", "not_reachable"),
+    ("Hassan Raza", "+92", "3001234512", "PK", "Karachi", "DHA", "propertyfinder", 0, "3br", 2_900_000, "contacted", "warm", "en", 4, "rahul", ""),
+    ("Noora Al-Hajri", "+974", "55123413", "QA", "Lusail", "Marina District", "instagram", 0, "2br", 1_850_000, "sv_scheduled", "hot", "ar", 7, "rahul", ""),
+    ("David Chen", "+1", "2125550114", "US", "New York", "Manhattan", "website", 1, "2br", 2_400_000, "new", "warm", "en", 1, "kavitha", ""),
+    ("Ravi Shankar", "+974", "33123415", "QA", "Al Wakrah", "Al Wakrah Corniche", "referral", 3, "villa", 4_200_000, "negotiation", "hot", "en", 26, "divya", ""),
+    ("Layla Mansour", "+966", "501234516", "SA", "Riyadh", "Al Olaya", "google", 1, "3br", 3_900_000, "interested", "warm", "ar", 12, "kavitha", ""),
+    ("Abdullah Al-Naimi", "+974", "55123417", "QA", "Doha", "West Bay", "propertyfinder", 2, "2br", 1_950_000, "booked", "hot", "ar", 52, "kavitha", ""),
+    ("Anil Kumar", "+974", "66123418", "QA", "Doha", "Fereej Bin Omran", "facebook", None, "1br", 950_000, "lost", "cold", "en", 30, "sanjay", "bought_elsewhere"),
+    ("Emma Wilson", "+974", "33123419", "QA", "Doha", "Msheireb", "qatarliving", 2, "1br", 1_050_000, "contacted", "warm", "en", 3, "sanjay", ""),
+    ("Yousef Al-Emadi", "+974", "55123420", "QA", "Umm Salal", "Umm Salal Mohammed", "walk_in", 3, "villa", 3_500_000, "sv_done", "hot", "ar", 16, "divya", ""),
+    ("Grace Fernandes", "+974", "66123421", "QA", "Doha", "Abu Hamour", "instagram", 0, "1br", 1_200_000, "new", "warm", "en", 0, "rahul", ""),
+    ("Tariq Saleh", "+965", "50123422", "KW", "Kuwait City", "Salmiya", "google", 1, "2br", 2_300_000, "lost", "cold", "ar", 41, "kavitha", "location"),
+    ("Meenakshi Iyer", "+91", "9884012323", "IN", "Chennai", "Velachery", "facebook", 2, "2br", 1_500_000, "interested", "warm", "en", 8, "sanjay", ""),
+    ("Faisal Al-Mohannadi", "+974", "55123424", "QA", "Lusail", "Qetaifan Island", "broker", 0, "3br", 3_100_000, "new", "hot", "ar", 0, "divya", ""),
+    ("Sunita Rao", "+974", "33123425", "QA", "Al Rayyan", "Education City", "other:LinkedIn", 2, "2br", 1_600_000, "contacted", "warm", "en", 5, "rahul", ""),
+]
+LOST_AT_RANK = {"not_reachable": 0, "bought_elsewhere": 2, "location": 3, "budget": 4}
+AD_SPEND = {"facebook": 18000, "instagram": 12000, "google": 15000, "propertyfinder": 22000, "qatarliving": 6000,
+            "print": 9000, "website": 3000, "broker": 8000}
+NOTES = ["Asked about payment plan and handover date", "Wants sea view, high floor", "Comparing with another developer",
+         "Will decide after family visit", "Asked about residency visa eligibility", "Interested in furnished option"]
 
 
 class Command(BaseCommand):
-    help = "Load a realistic 6-month demo dataset for the configured company."
+    help = "Load a small Qatar demo dataset (4 projects, 8 staff, 25 leads)."
 
     def add_arguments(self, parser):
         parser.add_argument("--reset", action="store_true")
@@ -81,253 +76,148 @@ class Command(BaseCommand):
             for model in (Notification, AuditLog, Booking, SiteVisit, Activity, Assignment, Lead, Target, AdSpend):
                 model.objects.all().delete()
             Project.objects.all().delete()
-        self.rng = rng = random.Random(42)
-        self.now = now = timezone.now()
-        self.used_phones = set(Lead.objects.values_list("phone", flat=True))
-
-        users, profiles = self._users()
-        projects = self._projects()
-        team_execs = {
-            team: [u for u, p in profiles.items() if p.team and p.team.name == team and p.role == Profile.EXECUTIVE]
-            for team in ("Team Velachery", "Team OMR")
-        }
-        for name, *_rest, team, _w, _types in PROJECTS:
-            for u in team_execs[team]:
-                profiles[u].projects.add(projects[name])
-
+            get_user_model().objects.filter(profile__isnull=False).exclude(
+                username__in=[s[0] for s in STAFF]).delete()
+            Team.objects.exclude(name__in={s[4] for s in STAFF if s[4]}).delete()
         if Lead.objects.exists():
             self.stdout.write(self.style.WARNING("Leads already exist. Use --reset to reload."))
             return
-
-        execs = [u for u, p in profiles.items() if p.role == Profile.EXECUTIVE]
-        speed = {u: next(s[5] for s in STAFF if s[0] == u.username) for u in execs}
-        skill = {u: next(s[6] for s in STAFF if s[0] == u.username) for u in execs}
-        source_keys, source_w = list(SOURCES), [SOURCES[s][0] for s in SOURCES]
-        proj_names, proj_w = [p[0] for p in PROJECTS], [p[6] for p in PROJECTS]
-
-        count = 0
-        for _ in range(820):
-            days_ago = int(180 * rng.random() ** 1.12)
-            created = now - timedelta(days=days_ago, hours=rng.randint(0, 12), minutes=rng.randint(0, 59))
-            if days_ago == 0:
-                created = now - timedelta(minutes=rng.randint(20, 600))
-            source = rng.choices(source_keys, weights=source_w)[0]
-            pname = rng.choices(proj_names, weights=proj_w)[0] if rng.random() < 0.88 else None
-            project = projects.get(pname)
-            team = next(p[5] for p in PROJECTS if p[0] == pname) if pname else rng.choice(list(team_execs))
-            owner = rng.choice(team_execs[team])
-            self._make_lead(created, source, project, pname, owner, speed[owner], skill[owner], users)
-            count += 1
-
-        self._untouched(execs, projects, users)
-        self._ad_spend_targets(execs)
-        self._extras(users, execs)
+        self.now = timezone.now()
+        users = self._users()
+        projects = self._projects(users)
+        for i, row in enumerate(LEADS):
+            self._lead(i, row, users, projects)
+        self._spend_and_targets(users)
         self.stdout.write(self.style.SUCCESS(
             f"Loaded {len(users)} users, {len(projects)} projects, {Lead.objects.count()} leads, "
-            f"{Activity.objects.count()} activities, {SiteVisit.objects.count()} site visits, "
-            f"{Booking.objects.count()} bookings."
+            f"{SiteVisit.objects.count()} site visits, {Booking.objects.count()} bookings."
         ))
-
-    # ------------------------------------------------------------------ helpers
 
     def _users(self):
         User = get_user_model()
-        teams = {}
-        users, profiles = {}, {}
-        for username, first, last, role, team, *_ in STAFF:
+        users, teams = {}, {}
+        for username, first, last, role, team, _speed in STAFF:
             user, _ = User.objects.get_or_create(username=username)
-            user.first_name, user.last_name, user.email = first, last, f"{username}@{settings.COMPANY_WEBSITE}"
+            user.first_name, user.last_name = first, last
+            user.email = f"{username}@{settings.COMPANY_WEBSITE}"
             user.is_active = True
             user.is_staff = user.is_superuser = role == Profile.ADMIN
             user.set_password(PASSWORD)
             user.save()
             profile, _ = Profile.objects.get_or_create(user=user)
-            profile.role = role
-            profile.phone = f"98400{self.rng.randint(10000, 99999)}"
+            profile.role, profile.phone = role, f"+974 5550 {len(users):04d}"
             profile.accepts_leads = role == Profile.EXECUTIVE
-            if team:
-                teams.setdefault(team, Team.objects.get_or_create(name=team)[0])
-                profile.team = teams[team]
+            profile.team = teams.setdefault(team, Team.objects.get_or_create(name=team)[0]) if team else None
             profile.save()
-            users[username], profiles[user] = user, profile
-        Team.objects.filter(name="Team Velachery").update(leader=users["arun"])
-        Team.objects.filter(name="Team OMR").update(leader=users["sneha"])
-        return users, profiles
+            users[username] = user
+        Team.objects.filter(name="Team Lusail").update(leader=users["arun"])
+        Team.objects.filter(name="Team West Bay").update(leader=users["sneha"])
+        return users
 
-    def _projects(self):
-        out = {}
-        for name, loc, types, pfrom, pto, *_ in PROJECTS:
-            out[name], _ = Project.objects.update_or_create(
-                name=name,
-                defaults={"location": loc, "property_types": types, "price_from": pfrom, "price_to": pto,
-                          "brochure_url": f"https://{settings.COMPANY_WEBSITE}/{name.split()[1].lower()}.pdf"},
-            )
+    def _projects(self, users):
+        out = []
+        for name, location, types, pfrom, pto, team in PROJECTS:
+            project, _ = Project.objects.update_or_create(name=name, defaults={
+                "location": location, "property_types": types, "price_from": pfrom, "price_to": pto,
+                "brochure_url": f"https://{settings.COMPANY_WEBSITE}/{name.split()[1].lower()}.pdf", "is_active": True,
+            })
+            for username, *_r, member_team, _s in STAFF:
+                if member_team == team and username in users:
+                    users[username].profile.projects.add(project)
+            out.append(project)
         return out
-
-    def _phone(self):
-        while True:
-            p = f"{self.rng.choice('9876')}{self.rng.randint(100000000, 999999999)}"
-            if p not in self.used_phones:
-                self.used_phones.add(p)
-                return p
 
     def _act(self, lead, kind, at, by, note="", outcome=""):
         if at <= self.now:
             Activity.objects.create(lead=lead, kind=kind, note=note, outcome=outcome, created_by=by, created_at=at)
 
-    def _budget_for(self, pname):
-        if not pname:
-            return self.rng.choice([b for b, _ in Lead.BUDGETS])
-        lo, hi = next((p[3], p[4]) for p in PROJECTS if p[0] == pname)
-        mid = self.rng.uniform(lo, hi)
-        for key, cap in (("lt50", 50), ("50_75", 75), ("75_100", 100), ("100_150", 150)):
-            if mid < cap:
-                return key
-        return "gt150"
+    def _lead(self, i, row, users, projects):
+        (name, dial, number, country, city, area, source, proj, ptype, budget, stage, temp, _lang, days, owner_name,
+         lost_reason) = row
+        now, owner = self.now, users[owner_name]
+        project = projects[proj] if proj is not None else None
+        source, _, source_other = source.partition(":")
+        created = now - timedelta(days=days, hours=2 + i % 5) if days else now - timedelta(minutes=50 + i * 17)
+        rank = LOST_AT_RANK[lost_reason] if stage == Lead.LOST else Lead.STAGE_RANK[stage]
+        speed = next(s[5] for s in STAFF if s[0] == owner_name)
+        span = max((now - created) * 0.85, timedelta(hours=1))
+        step_at = {r: created + span * r / 7 for r in range(1, 7)}
+        step_at[1] = created + timedelta(minutes=speed + i % 7)
 
-    def _make_lead(self, created, source, project, pname, owner, speed, skill, users):
-        rng, now = self.rng, self.now
-        quality = SOURCES[source][1]
-        types = next(p[7] for p in PROJECTS if p[0] == pname) if pname else ["2bhk", "3bhk"]
         lead = Lead.objects.create(
-            name=f"{rng.choice(FIRST)} {rng.choice(LAST)}", phone=self._phone(),
-            email="" if rng.random() < 0.4 else f"user{rng.randint(1000, 99999)}@example.com",
-            area=rng.choice(AREAS), budget=self._budget_for(pname), property_type=rng.choice(types),
-            project=project, source=source, owner=owner, language="ta" if rng.random() < 0.3 else "en",
-            created_at=created, last_enquiry_at=created, stage_changed_at=created,
-            notes=rng.choice(["", "", "Looking for ready-to-move", "Investment purpose", "First home",
-                              "Wants near IT corridor", "NRI - prefers video call"]),
+            name=name, phone_code=dial, phone=number, country=country, city=city, area=area,
+            email=f"{name.split()[0].lower()}.{i}@example.com" if i % 3 else "", budget_amount=Decimal(budget),
+            property_type=ptype, project=project, source=source, source_other=source_other, owner=owner, language="en", temperature=temp,
+            created_at=created, last_enquiry_at=created, stage_changed_at=created, notes=NOTES[i % len(NOTES)],
         )
-        Activity.objects.create(lead=lead, kind="system", created_at=created,
-                                note=f"Lead created via {lead.get_source_display()}")
+        Activity.objects.create(lead=lead, kind="system", created_at=created, note=f"Lead created via {lead.get_source_display()}")
         Assignment.objects.create(lead=lead, to_user=owner, reason="Round-robin", created_at=created)
         Activity.objects.create(lead=lead, kind="system", created_at=created + timedelta(seconds=5),
                                 note=f"Assigned to {owner.get_full_name()} by Auto-assignment - Round-robin")
+        Notification.objects.create(user=owner, text=f"New lead assigned: {name} ({lead.get_source_display()})",
+                                    url=f"/leads/{lead.pk}/", created_at=created, is_read=rank > 0)
 
-        rank, t = 0, created
-        times = {}
-        for r in range(1, 7):
-            p = STEP_P[r] * (quality if r >= 2 else 1) * (skill if r >= 5 else 1)
-            if rng.random() > min(p, 0.95):
-                break
-            if r == 1:
-                gap = timedelta(minutes=max(2, rng.gauss(speed, speed * 0.6)))
-            else:
-                gap = timedelta(days=rng.uniform(*{2: (0.5, 4), 3: (1, 6), 4: (1, 5), 5: (2, 9), 6: (3, 14)}[r]))
-            if t + gap > now:
-                break
-            t += gap
-            rank, times[r] = r, t
+        labels = dict(Lead.STAGES)
+        order = [Lead.NEW, Lead.CONTACTED, Lead.INTERESTED, Lead.SV_SCHEDULED, Lead.SV_DONE, Lead.NEGOTIATION, Lead.BOOKED]
+        if rank >= 1:
+            lead.first_response_at = step_at[1]
+            self._act(lead, "call", step_at[1], owner, NOTES[(i + 1) % len(NOTES)], "connected")
+            self._act(lead, "whatsapp", step_at[1] + timedelta(minutes=6), owner,
+                      f"WhatsApp sent: First response (EN)")
+        elif stage == Lead.LOST:
+            for k in range(3):
+                self._act(lead, "call", created + timedelta(days=k + 1), owner, "", "no_answer")
+        for r in range(1, rank + 1):
+            self._act(lead, "system", step_at[r], owner, f"Stage changed: {labels[order[r - 1]]} → {labels[order[r]]}")
 
-        stage_for_rank = {0: Lead.NEW, 1: Lead.CONTACTED, 2: Lead.INTERESTED, 3: Lead.SV_SCHEDULED,
-                          4: Lead.SV_DONE, 5: Lead.NEGOTIATION, 6: Lead.BOOKED}
-        visit_at = None
-        if 1 in times:
-            lead.first_response_at = times[1]
-            self._act(lead, "call", times[1], owner, rng.choice(NOTES["call"]), "connected")
-            self._act(lead, "whatsapp", times[1] + timedelta(minutes=8), owner, "WhatsApp sent: First response (EN)")
-        elif (now - created).days > 2:
-            for k in range(rng.randint(1, 3)):
-                self._act(lead, "call", created + timedelta(hours=2 + k * 20), owner, "", rng.choice(["no_answer", "switched_off", "busy"]))
-        for r in range(2, rank + 1):
-            between = times[r - 1] + (times[r] - times[r - 1]) / 2
-            kind = rng.choice(["call", "call", "whatsapp", "meeting"]) if r >= 5 else rng.choice(["call", "whatsapp"])
-            self._act(lead, kind, between, owner, rng.choice(NOTES.get(kind, NOTES["call"])), "interested" if kind == "call" else "")
-            self._act(lead, "system", times[r], owner, f"Stage changed: {dict(Lead.STAGES)[stage_for_rank[r - 1]]} → {dict(Lead.STAGES)[stage_for_rank[r]]}")
-
-        if rank >= 3:
-            visit_at = times.get(4) or max(times[3] + timedelta(days=rng.uniform(1, 5)), now + timedelta(hours=rng.randint(2, 140)))
-            visit_at = timezone.make_aware(datetime.combine(timezone.localtime(visit_at).date(),
-                                                            time(rng.choice([10, 11, 12, 15, 16, 17]), rng.choice([0, 30]))))
-            if 4 in times:
-                visit_at = min(visit_at, times[4])
-
-        lost_reason = ""
-        last = times.get(rank, created)
-        stage = stage_for_rank[rank]
-        if rank < 6 and (now - last).days > rng.randint(18, 45):
-            stage = Lead.LOST
-            lost_reason = rng.choice(LOST_BY_RANK[rank])
-            lost_at = min(now, last + timedelta(days=rng.randint(5, 18)))
-            self._act(lead, "system", lost_at, owner, f"Stage changed: → Lost ({dict(Lead.LOST_REASONS)[lost_reason]})")
-            last = lost_at
-
-        lead.stage, lead.max_stage_rank, lead.stage_changed_at = stage, rank, last
-        lead.lost_reason = lost_reason
-        lead.temperature = Lead.COLD if stage == Lead.LOST else (
-            Lead.HOT if rank >= 4 or stage == Lead.BOOKED else rng.choice([Lead.WARM, Lead.WARM, Lead.COLD, Lead.HOT]))
-        if stage in Lead.OPEN_STAGES:
-            lead.next_followup = now + timedelta(hours=rng.uniform(-80, 110))
-            if stage == Lead.SV_SCHEDULED and visit_at:
-                lead.next_followup = visit_at - timedelta(hours=3)
-        if rng.random() < 0.08:
-            lead.enquiry_count = 2
-            again = min(now, created + timedelta(days=rng.randint(3, 40)))
-            lead.last_enquiry_at = again
-            self._act(lead, "system", again, None, f"Enquired again via {rng.choice(['99acres', 'Facebook Ads', 'Website'])}")
-        lead.save()
-
-        if visit_at and project:
-            status = SiteVisit.DONE if rank >= 4 else (SiteVisit.NO_SHOW if stage == Lead.LOST else SiteVisit.SCHEDULED)
+        last = step_at.get(rank, created)
+        if rank >= 3 and project:
+            done = rank >= 4
+            visit_at = step_at[4] if done else (now + timedelta(days=1 + i % 3)).replace(hour=11 + i % 5, minute=0)
+            status = SiteVisit.DONE if done else (SiteVisit.NO_SHOW if stage == Lead.LOST else SiteVisit.SCHEDULED)
+            if status == SiteVisit.NO_SHOW:
+                visit_at = step_at[3] + timedelta(days=2)
             SiteVisit.objects.create(
                 lead=lead, project=project, scheduled_at=visit_at, executive=owner, status=status,
+                feedback="Liked the layout and community amenities" if done else "",
                 completed_at=visit_at + timedelta(hours=1) if status != SiteVisit.SCHEDULED else None,
-                feedback=rng.choice(["Liked the clubhouse and layout", "Felt the price is high", "Wants a higher floor",
-                                     "Family loved the unit", "Concerned about traffic"]) if status == SiteVisit.DONE else "",
-                created_by=owner, created_at=times[3],
+                created_by=owner, created_at=step_at[3],
             )
-            if status == SiteVisit.DONE:
+            if done:
                 self._act(lead, "site_visit", visit_at + timedelta(hours=1), owner, f"Site visit done at {project}.")
+            elif status == SiteVisit.SCHEDULED:
+                lead.next_followup = visit_at - timedelta(hours=3)
+
         if stage == Lead.BOOKED:
-            lo, hi = (float(project.price_from), float(project.price_to)) if project else (60.0, 100.0)
-            value = Decimal(round(rng.uniform(lo, hi) * 2) * 50000)
+            value = Decimal(budget)
             Booking.objects.create(
-                lead=lead, project=project or Project.objects.first(), unit_no=f"{rng.choice('ABCD')}-{rng.randint(1, 14)}{rng.randint(1, 8):02d}",
-                deal_value=value, booking_amount=(value * Decimal("0.1")).quantize(Decimal("1000")),
-                booking_date=timezone.localtime(times[6]).date(), executive=owner, created_at=times[6],
+                lead=lead, project=project, unit_no=f"{'ABCT'[i % 4]}-{10 + i}{i % 4 + 1:02d}", deal_value=value,
+                booking_amount=(value * Decimal("0.10")).quantize(Decimal("1000")),
+                booking_date=timezone.localtime(step_at[6]).date(), executive=owner, created_at=step_at[6],
             )
+            AuditLog.objects.create(user=owner, action="booking", object_type="Booking", created_at=step_at[6],
+                                    summary=f"{name} booked {project}")
+        elif stage == Lead.LOST:
+            last = min(now, last + timedelta(days=4))
+            lead.lost_reason = lost_reason
+            self._act(lead, "system", last, owner, f"Stage changed: → Lost ({dict(Lead.LOST_REASONS)[lost_reason]})")
+        elif rank == 0:
+            lead.next_followup = created + timedelta(minutes=30)
+        elif not lead.next_followup:
+            lead.next_followup = now + timedelta(hours=(i % 5 - 1) * 20)
 
-    def _untouched(self, execs, projects, users):
-        rng = self.rng
-        for i in range(7):
-            owner = rng.choice(execs)
-            created = self.now - timedelta(minutes=rng.randint(35, 300))
-            lead = Lead.objects.create(
-                name=f"{rng.choice(FIRST)} {rng.choice(LAST)}", phone=self._phone(), area=rng.choice(AREAS),
-                project=rng.choice(list(projects.values())), source=rng.choice(["facebook", "website", "99acres", "google"]),
-                property_type=rng.choice(["2bhk", "3bhk"]), budget=rng.choice(["50_75", "75_100"]), owner=owner,
-                created_at=created, last_enquiry_at=created, stage_changed_at=created, temperature=Lead.WARM,
-                next_followup=created + timedelta(minutes=30),
-            )
-            Activity.objects.create(lead=lead, kind="system", created_at=created, note=f"Lead created via {lead.get_source_display()}")
-            Assignment.objects.create(lead=lead, to_user=owner, reason="Round-robin", created_at=created)
-            Notification.objects.create(user=owner, text=f"New lead assigned: {lead.name} ({lead.get_source_display()})",
-                                        url=f"/leads/{lead.pk}/", created_at=created)
+        lead.stage, lead.max_stage_rank, lead.stage_changed_at = stage, rank, last
+        lead.save()
 
-    def _ad_spend_targets(self, execs):
-        today = timezone.localdate()
-        m = month_start(today)
-        for i in range(7):
-            for source, base in AD_SPEND.items():
-                AdSpend.objects.update_or_create(month=m, source=source, defaults={
-                    "amount": Decimal(round(base * self.rng.uniform(0.85, 1.15), -3))})
-            for u in execs:
-                Target.objects.update_or_create(user=u, month=m, defaults={
-                    "site_visits": self.rng.choice([8, 10, 12]), "bookings": self.rng.choice([2, 2, 3])})
-            m = month_start(m - timedelta(days=1))
-
-    def _extras(self, users, execs):
-        for u in execs:
-            for lead in Lead.objects.filter(owner=u).order_by("-created_at")[:6]:
-                Notification.objects.create(user=u, text=f"New lead assigned: {lead.name} ({lead.get_source_display()})",
-                                            url=f"/leads/{lead.pk}/", created_at=lead.created_at,
-                                            is_read=lead.first_response_at is not None)
-        for lead in Lead.objects.filter(stage=Lead.SV_SCHEDULED, owner__in=execs)[:5]:
-            Notification.objects.create(user=users["arun"], text=f"Site visit scheduled: {lead.name}", url=f"/leads/{lead.pk}/")
-        AuditLog.objects.create(user=users["meera"], action="export", object_type="Lead", summary="Exported 214 leads",
-                                created_at=self.now - timedelta(days=3))
-        AuditLog.objects.create(user=users["karthik"], action="update", object_type="Project",
-                                summary="Saved project MV Royal Villas", created_at=self.now - timedelta(days=9))
-        for b in Booking.objects.select_related("lead", "executive").order_by("-created_at")[:10]:
-            AuditLog.objects.create(user=b.executive, action="booking", object_type="Booking", object_id=str(b.pk),
-                                    summary=f"{b.lead.name} booked {b.project} {b.unit_no}", created_at=b.created_at)
+    def _spend_and_targets(self, users):
+        month = month_start(timezone.localdate())
+        for _ in range(3):
+            for source, amount in AD_SPEND.items():
+                AdSpend.objects.update_or_create(month=month, source=source, defaults={"amount": Decimal(amount)})
+            AdSpend.objects.update_or_create(month=month, source="other", custom_source="LinkedIn",
+                                             defaults={"amount": Decimal(4000)})
+            for s in STAFF:
+                if s[3] == Profile.EXECUTIVE:
+                    Target.objects.update_or_create(user=users[s[0]], month=month,
+                                                    defaults={"site_visits": 4, "bookings": 1})
+            month = month_start(month - timedelta(days=1))

@@ -7,10 +7,12 @@ from django.db import transaction
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from ..access import ADMIN, SALES_ROLES, can_view_lead, role_required, visible_leads
 from ..forms import BookingForm, SiteVisitForm, VisitResultForm
+from ..locale_data import CURRENCIES, format_money
 from ..models import Booking, Lead, Notification, Project, SiteVisit
 from ..services import audit, log_activity, notify, set_stage
 from .leads import get_visible_lead
@@ -129,7 +131,7 @@ def booking_create(request, pk):
             booking.save()
             set_stage(lead, Lead.BOOKED, request.user)
             log_activity(lead, "note", request.user,
-                         note=f"Booked unit {booking.unit_no} at {booking.project} for ₹{booking.deal_value:,.0f}")
+                         note=f"Booked unit {booking.unit_no} at {booking.project} for {format_money(booking.deal_value)}")
             audit(request.user, "booking", booking, f"{lead.name} booked {booking.project} {booking.unit_no}")
         messages.success(request, f"Congratulations! {lead.name} has booked {booking.project} - {booking.unit_no}.")
         return redirect("lead_detail", pk=pk)
@@ -187,3 +189,14 @@ def notification_open(request, pk):
 def notifications_read_all(request):
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
     return redirect("notifications")
+
+
+@require_POST
+def set_currency(request):
+    code = request.POST.get("currency")
+    if code in CURRENCIES:
+        request.session["currency"] = code
+    nxt = request.POST.get("next") or "/"
+    if not url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        nxt = "/"
+    return redirect(nxt)

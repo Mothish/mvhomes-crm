@@ -11,11 +11,11 @@
         <span class="badge b-{{ lead.temperature|temp_color }}"><span class="temp temp-{{ lead.temperature }}"></span> {{ lead.get_temperature_display }}</span>
         {% if lead.enquiry_count > 1 %}<span class="badge b-orange">Enquired {{ lead.enquiry_count }}×</span>{% endif %}
       </h1>
-      <p>{{ lead.phone }} · {{ lead.get_source_display }} · received {{ lead.created_at|timesince }} ago · owner <strong>{{ lead.owner|person }}</strong></p>
+      <p>{{ lead.full_phone }} · {{ lead.get_source_display }} · received {{ lead.created_at|timesince }} ago · owner <strong>{{ lead.owner|person }}</strong></p>
     </div>
   </div>
   <div class="head-actions quick">
-    <a class="btn btn-secondary" href="tel:{{ lead.phone }}">📞 Call</a>
+    <a class="btn btn-secondary" href="tel:{{ lead.tel }}">📞 Call</a>
     <a class="btn btn-wa" href="{% url 'lead_whatsapp' lead.pk 'first_response' %}" target="_blank" rel="noopener">WhatsApp</a>
     {% if lead.is_open %}
     <a class="btn btn-secondary" href="{% url 'visit_schedule' lead.pk %}">🏠 Schedule visit</a>
@@ -30,7 +30,7 @@
 <div class="alert alert-warning">Lost: <strong>{{ lead.get_lost_reason_display }}</strong>{% if lead.lost_note %} - {{ lead.lost_note }}{% endif %}. Move it to any stage below to reopen.</div>
 {% endif %}
 {% if booking %}
-<div class="alert alert-success">🎉 Booked <strong>{{ booking.project }} · Unit {{ booking.unit_no }}</strong> for <strong>{{ booking.deal_value|crore }}</strong> on {{ booking.booking_date|date:"d M Y" }} (booking amount {{ booking.booking_amount|inr }}).</div>
+<div class="alert alert-success">🎉 Booked <strong>{{ booking.project }} · Unit {{ booking.unit_no }}</strong> for <strong>{{ booking.deal_value|money_short }}</strong> on {{ booking.booking_date|date:"d M Y" }} (booking amount {{ booking.booking_amount|money }}).</div>
 {% endif %}
 
 {% if lead.stage != 'booked' %}
@@ -81,12 +81,12 @@
       <div class="card-header"><h2>Details</h2></div>
       <div class="card-body">
         <dl class="dl">
-          <dt>Phone</dt><dd><a href="tel:{{ lead.phone }}">{{ lead.phone }}</a>{% if lead.alt_phone %} / {{ lead.alt_phone }}{% endif %}</dd>
+          <dt>Phone</dt><dd><a href="tel:{{ lead.tel }}">{{ lead.full_phone }}</a>{% if lead.alt_phone %} / {{ lead.phone_code }} {{ lead.alt_phone }}{% endif %}</dd>
           <dt>Email</dt><dd>{{ lead.email|default:"—" }}</dd>
-          <dt>Area</dt><dd>{{ lead.area|default:"—" }}</dd>
-          <dt>Project</dt><dd>{{ lead.project.name|default:"Not decided" }}</dd>
+          <dt>Location</dt><dd>{{ lead.location|default:"—" }} · {{ lead.get_country_display }}</dd>
+          <dt>Project</dt><dd>{{ lead.project_label|default:"Not decided" }}</dd>
           <dt>Looking for</dt><dd>{{ lead.get_property_type_display|default:"—" }}</dd>
-          <dt>Budget</dt><dd>{{ lead.get_budget_display|default:"—" }}</dd>
+          <dt>Budget</dt><dd>{{ lead.budget_amount|money|default:"—" }}</dd>
           <dt>Source</dt><dd>{{ lead.get_source_display }}</dd>
           <dt>Next follow-up</dt><dd>{% if lead.next_followup and lead.is_open %}<span class="{% if lead.is_overdue %}text-red{% endif %}">{{ lead.next_followup|date:"D d M, h:i A" }}</span>{% else %}—{% endif %}</dd>
           <dt>First response</dt><dd>{% if lead.response_minutes is not None %}{{ lead.response_minutes|minutes }} after enquiry{% else %}<span class="text-amber">Not contacted yet</span>{% endif %}</dd>
@@ -118,9 +118,8 @@
         {% for p in previews %}
         <details class="msg"{% if forloop.first %} open{% endif %}>
           <summary>{{ p.label }}</summary>
-          <div class="bubble" style="margin:8px 0">{% if lead.language == 'ta' %}{{ p.ta }}{% else %}{{ p.en }}{% endif %}</div>
-          <a class="btn btn-wa btn-sm" href="{% url 'lead_whatsapp' lead.pk p.key %}?lang=en" target="_blank" rel="noopener">Send English</a>
-          <a class="btn btn-wa btn-sm" href="{% url 'lead_whatsapp' lead.pk p.key %}?lang=ta" target="_blank" rel="noopener">தமிழில் அனுப்பு</a>
+          <div class="bubble" style="margin:8px 0">{{ p.en }}</div>
+          <a class="btn btn-wa btn-sm" href="{% url 'lead_whatsapp' lead.pk p.key %}" target="_blank" rel="noopener">Send on WhatsApp</a>
         </details>
         {% endfor %}
       </div>

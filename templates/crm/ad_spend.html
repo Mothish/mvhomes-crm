@@ -6,14 +6,38 @@
   <form method="get" class="filters" style="margin:0"><input class="input" type="month" name="month" value="{{ month|date:'Y-m' }}" onchange="this.form.submit()"></form>
 </div>
 <form method="post" class="card form-card">{% csrf_token %}
-  <div class="card-header"><h2>{{ month|date:"F Y" }}</h2><span class="muted">Total {{ total|inr }}</span></div>
+  <div class="card-header"><h2>{{ month|date:"F Y" }}</h2>
+    <span class="who"><label class="small muted" for="ad-currency">Amounts in</label>
+      <select class="input input-sm" id="ad-currency" name="currency">{% for code, label in currency_choices %}<option value="{{ code }}"{% if code == currency %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <span class="muted">Total {{ total|money }}</span></span></div>
   <div class="table-wrap"><table class="table">
-    <thead><tr><th>Source</th><th style="width:220px">Spend (₹)</th><th class="num">Leads received</th><th class="num">Cost per lead</th></tr></thead>
+    <thead><tr><th>Source</th><th style="width:220px">Spend</th><th class="num">Leads received</th><th class="num">Cost per lead</th></tr></thead>
     <tbody>{% for r in rows %}<tr>
       <td><strong>{{ r.label }}</strong></td>
-      <td><input class="input" name="amount_{{ r.key }}" inputmode="decimal" value="{% if r.amount is not None %}{{ r.amount|floatformat:0 }}{% endif %}" placeholder="0"></td>
-      <td class="num">{{ r.leads }}</td><td class="num">{{ r.cpl|inr|default:"—" }}</td></tr>{% endfor %}</tbody>
+      <td><input class="input" name="amount_{{ r.key }}" inputmode="decimal" value="{% if r.amount_display is not None %}{{ r.amount_display|floatformat:0 }}{% endif %}" placeholder="0"></td>
+      <td class="num">{{ r.leads }}</td><td class="num">{{ r.cpl|money|default:"—" }}</td></tr>{% endfor %}</tbody>
+    <tbody id="custom-spend">
+      <tr class="group-row"><td colspan="4"><strong>Custom sources</strong> <span class="muted small">Type any channel name (e.g. LinkedIn, TikTok, Roadshow). Leads with the same custom source are matched automatically.</span></td></tr>
+      {% for c in custom_rows %}<tr>
+        <td><input class="input" name="custom_name" value="{{ c.name }}" maxlength="60" aria-label="Custom source name"></td>
+        <td><input class="input" name="custom_amount" inputmode="decimal" value="{% if c.amount_display is not None %}{{ c.amount_display|floatformat:0 }}{% endif %}" placeholder="0"></td>
+        <td class="num">{{ c.leads }}</td><td class="num">{{ c.cpl|money|default:"—" }}</td></tr>{% endfor %}
+      <tr data-new-row>
+        <td><input class="input" name="custom_name" maxlength="60" placeholder="New source name" aria-label="New custom source name"></td>
+        <td><input class="input" name="custom_amount" inputmode="decimal" placeholder="0"></td>
+        <td class="num muted">—</td><td class="num muted">—</td></tr>
+    </tbody>
   </table></div>
-  <div class="card-body form-actions" style="margin:0"><button class="btn btn-primary" type="submit">Save ad spend</button></div>
+  <div class="card-body form-actions" style="margin:0">
+    <button class="btn btn-secondary" type="button" id="add-custom-spend">+ Add custom source</button>
+    <button class="btn btn-primary" type="submit">Save ad spend</button></div>
 </form>
 {% endblock %}
+{% block scripts %}<script>
+document.getElementById('add-custom-spend').addEventListener('click', function () {
+  var tpl = document.querySelector('#custom-spend tr[data-new-row]'), row = tpl.cloneNode(true);
+  row.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+  tpl.parentNode.appendChild(row);
+  row.querySelector('input').focus();
+});
+</script>{% endblock %}

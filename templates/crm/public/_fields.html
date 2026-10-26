@@ -1,0 +1,17 @@
+{% for field in form %}
+  {% if field.name == 'website' %}<div class="hp" aria-hidden="true">{{ field }}</div>
+  {% elif field.name == 'consent' %}<div class="field"><label class="check small">{{ field }} {{ field.label }}</label>{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}</div>
+  {% elif field.name == 'phone_code' %}
+    <div class="field{% if form.phone.errors %} has-error{% endif %}">
+      <div class="input-pair">{{ form.phone_code }}{{ form.phone }}</div>
+      {% for e in form.phone.errors %}<small class="error">{{ e }}</small>{% endfor %}
+    </div>
+  {% elif field.name == 'currency' %}
+    <div class="field{% if form.budget_amount.errors %} has-error{% endif %}">
+      <div class="input-pair">{{ form.currency }}{{ form.budget_amount }}</div>
+      {% for e in form.budget_amount.errors %}<small class="error">{{ e }}</small>{% endfor %}
+    </div>
+  {% elif field.name != 'phone' and field.name != 'budget_amount' %}
+    <div class="field{% if field.errors %} has-error{% endif %}">{{ field }}{% for e in field.errors %}<small class="error">{{ e }}</small>{% endfor %}</div>
+  {% endif %}
+{% endfor %}

@@ -3,17 +3,15 @@ from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
 
-phone_validator = RegexValidator(r"^\d{10,15}$", "Enter a valid phone number (10-15 digits).")
+from .locale_data import COUNTRY_CHOICES, DEFAULT_COUNTRY, DEFAULT_DIAL
+
+phone_validator = RegexValidator(r"^\d{6,15}$", "Enter a valid phone number (6-15 digits, without country code).")
+dial_validator = RegexValidator(r"^\+\d{1,4}$", "Choose a country code.")
 
 
 def normalize_phone(value):
-    """Canonical form used for duplicate detection: +91 98400 12345 / 098400 12345 -> 9840012345."""
-    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
-    if len(digits) == 12 and digits.startswith("91"):
-        digits = digits[2:]
-    elif len(digits) == 11 and digits.startswith("0"):
-        digits = digits[1:]
-    return digits
+    """Digits only, without leading zeros: '055 123 456' -> '55123456'. Country code is stored separately."""
+    return "".join(ch for ch in str(value or "") if ch.isdigit()).lstrip("0")
 
 
 def month_start(d):
@@ -36,9 +34,9 @@ class Team(models.Model):
 class Project(models.Model):
     name = models.CharField(max_length=100, unique=True)
     location = models.CharField(max_length=120)
-    property_types = models.CharField(max_length=100, help_text="e.g. 2 BHK, 3 BHK, Villa")
-    price_from = models.DecimalField("Price from (₹ lakh)", max_digits=8, decimal_places=2)
-    price_to = models.DecimalField("Price to (₹ lakh)", max_digits=8, decimal_places=2)
+    property_types = models.CharField(max_length=100, help_text="e.g. 1-3 BR apartments, Villas")
+    price_from = models.DecimalField("Price from", max_digits=14, decimal_places=2)
+    price_to = models.DecimalField("Price to", max_digits=14, decimal_places=2)
     brochure_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -61,7 +59,7 @@ class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=EXECUTIVE)
     team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="members")
-    phone = models.CharField(max_length=15, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
     accepts_leads = models.BooleanField("Include in auto-assignment", default=True)
     projects = models.ManyToManyField(
         Project, blank=True, related_name="executives", help_text="Leave empty to receive leads for any project."
@@ -91,23 +89,27 @@ class Lead(models.Model):
 
     SOURCES = [
         ("facebook", "Facebook Ads"),
+        ("instagram", "Instagram"),
         ("google", "Google Ads"),
         ("website", "Website"),
-        ("99acres", "99acres"),
-        ("magicbricks", "MagicBricks"),
+        ("propertyfinder", "Property Finder"),
+        ("qatarliving", "Qatar Living"),
         ("walk_in", "Walk-in"),
         ("referral", "Referral"),
-        ("channel_partner", "Channel Partner"),
-        ("print", "Hoarding / Newspaper"),
+        ("broker", "Broker / Agent"),
+        ("print", "Billboard / Newspaper"),
         ("other", "Other"),
     ]
-    PROPERTY_TYPES = [("2bhk", "2 BHK"), ("3bhk", "3 BHK"), ("4bhk", "4 BHK"), ("villa", "Villa"), ("plot", "Plot")]
-    BUDGETS = [
-        ("lt50", "Below ₹50 L"),
-        ("50_75", "₹50 - 75 L"),
-        ("75_100", "₹75 L - 1 Cr"),
-        ("100_150", "₹1 - 1.5 Cr"),
-        ("gt150", "Above ₹1.5 Cr"),
+    PROPERTY_TYPES = [
+        ("studio", "Studio"),
+        ("1br", "1 Bedroom"),
+        ("2br", "2 Bedroom"),
+        ("3br", "3 Bedroom"),
+        ("4br", "4+ Bedroom"),
+        ("villa", "Villa"),
+        ("townhouse", "Townhouse"),
+        ("penthouse", "Penthouse"),
+        ("other", "Other"),
     ]
     HOT, WARM, COLD = "hot", "warm", "cold"
     TEMPERATURES = [(HOT, "Hot"), (WARM, "Warm"), (COLD, "Cold")]
@@ -120,17 +122,24 @@ class Lead(models.Model):
         ("loan_rejected", "Loan rejected"),
         ("other", "Other"),
     ]
-    LANGUAGES = [("en", "English"), ("ta", "Tamil")]
+    LANGUAGES = [("en", "English")]
 
     name = models.CharField(max_length=120)
-    phone = models.CharField(max_length=15, unique=True, validators=[phone_validator])
+    phone_code = models.CharField("Country code", max_length=5, default=DEFAULT_DIAL, validators=[dial_validator])
+    phone = models.CharField("Mobile number", max_length=15, validators=[phone_validator])
     alt_phone = models.CharField("Alternate phone", max_length=15, blank=True, validators=[phone_validator])
     email = models.EmailField(blank=True)
-    area = models.CharField("City / area", max_length=100, blank=True)
-    budget = models.CharField(max_length=10, choices=BUDGETS, blank=True)
+    country = models.CharField(max_length=2, choices=COUNTRY_CHOICES, default=DEFAULT_COUNTRY)
+    city = models.CharField(max_length=80, blank=True)
+    area = models.CharField("Area / district", max_length=100, blank=True)
+    budget_amount = models.DecimalField("Budget", max_digits=14, decimal_places=2, null=True, blank=True,
+                                        validators=[MinValueValidator(0)])
     property_type = models.CharField(max_length=10, choices=PROPERTY_TYPES, blank=True)
+    property_type_other = models.CharField("Custom property type", max_length=60, blank=True)
     project = models.ForeignKey(Project, null=True, blank=True, on_delete=models.SET_NULL, related_name="leads")
+    project_other = models.CharField("Custom project", max_length=100, blank=True)
     source = models.CharField(max_length=20, choices=SOURCES)
+    source_other = models.CharField("Custom source", max_length=60, blank=True)
     stage = models.CharField(max_length=15, choices=STAGES, default=NEW)
     max_stage_rank = models.PositiveSmallIntegerField(default=0)
     stage_changed_at = models.DateTimeField(default=timezone.now)
@@ -155,9 +164,36 @@ class Lead(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["stage"]), models.Index(fields=["next_followup"])]
+        constraints = [models.UniqueConstraint(fields=["phone_code", "phone"], name="unique_lead_phone")]
 
     def __str__(self):
         return self.name
+
+    def get_source_display(self):
+        if self.source == "other" and self.source_other:
+            return self.source_other
+        return dict(self.SOURCES).get(self.source, self.source)
+
+    def get_property_type_display(self):
+        if self.property_type == "other" and self.property_type_other:
+            return self.property_type_other
+        return dict(self.PROPERTY_TYPES).get(self.property_type, self.property_type)
+
+    @property
+    def project_label(self):
+        return self.project.name if self.project else self.project_other
+
+    @property
+    def full_phone(self):
+        return f"{self.phone_code} {self.phone}"
+
+    @property
+    def tel(self):
+        return f"{self.phone_code}{self.phone}"
+
+    @property
+    def location(self):
+        return ", ".join(p for p in (self.area, self.city) if p)
 
     @property
     def is_open(self):
@@ -251,9 +287,9 @@ class Booking(models.Model):
     lead = models.OneToOneField(Lead, on_delete=models.CASCADE, related_name="booking")
     project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="bookings")
     unit_no = models.CharField("Unit number", max_length=30)
-    deal_value = models.DecimalField("Deal value (₹)", max_digits=12, decimal_places=2, validators=[MinValueValidator(1)])
+    deal_value = models.DecimalField("Deal value", max_digits=14, decimal_places=2, validators=[MinValueValidator(1)])
     booking_amount = models.DecimalField(
-        "Booking amount (₹)", max_digits=12, decimal_places=2, validators=[MinValueValidator(1)]
+        "Booking amount", max_digits=14, decimal_places=2, validators=[MinValueValidator(1)]
     )
     booking_date = models.DateField(default=timezone.localdate)
     executive = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="bookings")
@@ -267,10 +303,11 @@ class Booking(models.Model):
 class AdSpend(models.Model):
     month = models.DateField()
     source = models.CharField(max_length=20, choices=Lead.SOURCES)
-    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    custom_source = models.CharField(max_length=60, blank=True, default="")
+    amount = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(0)])
 
     class Meta:
-        unique_together = [("month", "source")]
+        unique_together = [("month", "source", "custom_source")]
 
 
 class Target(models.Model):

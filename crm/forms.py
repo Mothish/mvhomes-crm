@@ -1,10 +1,17 @@
+from datetime import time
+
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
+from django.utils.html import format_html
 
 from .access import assignable_users, get_role
+from .locale_data import (
+    BASE_CURRENCY, CURRENCY_CHOICES, DEFAULT_COUNTRY, DEFAULT_DIAL, DIAL_CHOICES, currency_for, current_currency,
+    from_base, to_base,
+)
 from .models import Activity, Booking, Lead, Profile, Project, SiteVisit, Team, normalize_phone, phone_validator
 
 
@@ -15,11 +22,50 @@ class DateInput(forms.DateInput):
         super().__init__(attrs=attrs, format="%Y-%m-%d")
 
 
-class DateTimeInput(forms.DateTimeInput):
-    input_type = "datetime-local"
+def _time_label(hhmm):
+    h, m = map(int, hhmm.split(":"))
+    return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+
+
+TIME_SLOTS = [(f"{h:02d}:{m:02d}", _time_label(f"{h:02d}:{m:02d}")) for h in range(24) for m in (0, 30)]
+
+
+class TimeSlotSelect(forms.Select):
+    def get_context(self, name, value, attrs):
+        # Keep an existing off-slot time (e.g. 10:17) selectable instead of silently dropping it.
+        if value and value not in dict(self.choices):
+            self.choices = sorted([*self.choices, (value, _time_label(value))])
+        return super().get_context(name, value, attrs)
+
+
+class DateTimeInput(forms.MultiWidget):
+    """Date picker + time dropdown; unlike a native datetime-local picker, each closes after one click."""
 
     def __init__(self, attrs=None):
-        super().__init__(attrs=attrs, format="%Y-%m-%dT%H:%M")
+        super().__init__([DateInput(), TimeSlotSelect(choices=[("", "Select time")] + TIME_SLOTS)], attrs)
+
+    def decompress(self, value):
+        if not value:
+            return [None, ""]
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
+        return [value.date(), value.strftime("%H:%M")]
+
+    def render(self, name, value, attrs=None, renderer=None):
+        return format_html('<div class="dt-pair">{}</div>', super().render(name, value, attrs, renderer))
+
+
+class PickerDateTimeField(forms.SplitDateTimeField):
+    widget = DateTimeInput
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("input_time_formats", ["%H:%M"])
+        super().__init__(**kwargs)
+
+    def compress(self, data_list):
+        if data_list and data_list[0] and not data_list[1]:
+            data_list = [data_list[0], time(10, 0)]
+        return super().compress(data_list)
 
 
 class PhoneField(forms.CharField):
@@ -32,25 +78,88 @@ class PhoneField(forms.CharField):
         return normalize_phone(super().to_python(value))
 
 
+class ProjectOrOtherField(forms.ModelChoiceField):
+    """Project dropdown that also accepts "other"; LeadForm.clean() turns it into project_other text."""
+
+    def to_python(self, value):
+        if value == LeadForm.OTHER:
+            return value
+        return super().to_python(value)
+
+
 class StyledMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
+        for name, field in self.fields.items():
             widget = field.widget
             if isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
                 continue
             widget.attrs.setdefault("class", "input")
             if isinstance(widget, forms.Textarea):
                 widget.attrs.setdefault("rows", 3)
+            placeholder = f"Select {(field.label or name.replace('_', ' ')).lower()}"
+            if isinstance(field, forms.ModelChoiceField):
+                if field.empty_label == "---------":
+                    field.empty_label = placeholder
+            elif isinstance(field, forms.ChoiceField) and type(widget) is forms.Select:
+                choices = list(field.choices)
+                if choices and choices[0] == ("", "---------"):
+                    field.choices = [("", placeholder)] + choices[1:]
+                elif len(choices) > 1 and choices[0][0] != "":
+                    # A cleared select must re-render as empty, not silently show its first option.
+                    field.choices = [("", placeholder)] + choices
 
 
 def user_label(u):
     return u.get_full_name() or u.username
 
 
-class LeadForm(StyledMixin, forms.ModelForm):
-    phone = PhoneField(label="Phone")
+def strip_dial_code(phone, dial):
+    """Drop the country code if the user typed it into the number field too (e.g. +974 with +974 selected)."""
+    code = dial.lstrip("+")
+    if phone and code and phone.startswith(code) and len(phone) - len(code) >= 6:
+        return phone[len(code):]
+    return phone
+
+
+class MoneyFormMixin:
+    """Adds a currency dropdown; money_fields are shown in that currency and saved in the base currency."""
+    money_fields = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        currency = self.initial_currency()
+        field = forms.ChoiceField(choices=[("", "Select currency")] + CURRENCY_CHOICES, initial=currency, label="Currency")
+        field.widget.attrs["class"] = "input"
+        self.fields["currency"] = field
+        for name in self.money_fields:
+            if self.initial.get(name) not in (None, ""):
+                self.initial[name] = from_base(self.initial[name], currency)
+        order = list(self.fields)
+        order.remove("currency")
+        order.insert(order.index(self.money_fields[0]), "currency")
+        self.order_fields(order)
+
+    def initial_currency(self):
+        return current_currency.get()
+
+    def clean(self):
+        cleaned = super().clean()
+        currency = cleaned.get("currency") or BASE_CURRENCY
+        for name in self.money_fields:
+            if cleaned.get(name) is not None:
+                cleaned[name] = to_base(cleaned[name], currency)
+        return cleaned
+
+
+class LeadForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
+    money_fields = ("budget_amount",)
+    OTHER = "other"
+    OTHER_FIELDS = ("property_type", "project", "source")
+    phone_code = forms.ChoiceField(choices=DIAL_CHOICES, initial=DEFAULT_DIAL, label="Country code")
+    phone = PhoneField(label="Mobile number")
     alt_phone = PhoneField(label="Alternate phone", required=False)
+    project = ProjectOrOtherField(queryset=Project.objects.none(), required=False, label="Project")
     owner = forms.ModelChoiceField(
         queryset=None, required=False, label="Assign to", empty_label="Auto-assign (round-robin)"
     )
@@ -58,15 +167,38 @@ class LeadForm(StyledMixin, forms.ModelForm):
     class Meta:
         model = Lead
         fields = [
-            "name", "phone", "alt_phone", "email", "area", "budget", "property_type", "project", "source",
+            "name", "email", "phone_code", "phone", "alt_phone", "country", "city", "area", "property_type",
+            "property_type_other", "project", "project_other", "budget_amount", "source", "source_other",
             "temperature", "language", "next_followup", "notes",
         ]
-        widgets = {"next_followup": DateTimeInput(), "notes": forms.Textarea}
+        widgets = {
+            "notes": forms.Textarea,
+            "city": forms.TextInput(attrs={"data-combo": "city", "autocomplete": "off",
+                                           "placeholder": "Select or type a city"}),
+            "area": forms.TextInput(attrs={"data-combo": "area", "autocomplete": "off",
+                                           "placeholder": "Select or type an area"}),
+            "source_other": forms.TextInput(attrs={"placeholder": "e.g. LinkedIn, TikTok, Cityscape exhibition"}),
+            "property_type_other": forms.TextInput(attrs={"placeholder": "e.g. Duplex, Plot, Office, Shop"}),
+            "project_other": forms.TextInput(attrs={"placeholder": "Project or building name"}),
+        }
+        labels = {"budget_amount": "Budget", "source_other": "Specify source",
+                  "property_type_other": "Specify property type", "project_other": "Specify project"}
+        field_classes = {"next_followup": PickerDateTimeField}
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["project"].queryset = Project.objects.filter(is_active=True)
         self.fields["project"].empty_label = "Not decided"
+        self.fields["city"].required = True
+        self.fields["area"].required = True
+        for name in self.OTHER_FIELDS:
+            field, label = self.fields[name], "Other (type your own)"
+            if name == "project":
+                field.widget.choices = [*field.choices, (self.OTHER, label)]
+            else:
+                field.choices = [(k, label if k == self.OTHER else v) for k, v in field.choices]
+        if self.instance.pk and not self.instance.project and self.instance.project_other:
+            self.initial["project"] = self.OTHER
         if self.instance.pk or user is None or not user.is_authenticated:
             del self.fields["owner"]
         else:
@@ -77,10 +209,35 @@ class LeadForm(StyledMixin, forms.ModelForm):
                 self.fields["owner"].initial = user.pk
                 self.fields["owner"].empty_label = None
 
-    def validate_unique(self):
-        # Duplicates are handled as re-enquiries by the view, not as form errors.
-        if self.instance.pk:
-            super().validate_unique()
+    def initial_currency(self):
+        return currency_for(self.instance.country or DEFAULT_COUNTRY)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("area") and not cleaned.get("city"):
+            self.add_error("city", "Choose the city before the area.")
+        if cleaned.get("phone") and cleaned.get("phone_code"):
+            cleaned["phone"] = strip_dial_code(cleaned["phone"], cleaned["phone_code"])
+            if len(cleaned["phone"]) < 6:
+                self.add_error("phone", "Enter the number without the country code.")
+        for name in self.OTHER_FIELDS:
+            other = f"{name}_other"
+            if cleaned.get(name) == self.OTHER:
+                cleaned[other] = (cleaned.get(other) or "").strip()
+                if not cleaned[other]:
+                    self.add_error(other, "Please type it in.")
+                if name == "project":
+                    cleaned["project"] = None
+            else:
+                cleaned[other] = ""
+        return cleaned
+
+    def _get_validation_exclusions(self):
+        exclude = super()._get_validation_exclusions()
+        # New leads with a known number become re-enquiries in capture_lead(), so skip the unique check here.
+        if not self.instance.pk:
+            exclude.update({"phone", "phone_code"})
+        return exclude
 
 
 class ActivityForm(StyledMixin, forms.Form):
@@ -88,7 +245,7 @@ class ActivityForm(StyledMixin, forms.Form):
                              label="Activity")
     outcome = forms.ChoiceField(choices=[("", "-")] + Activity.OUTCOMES, required=False)
     note = forms.CharField(widget=forms.Textarea, required=False, label="Notes")
-    next_followup = forms.DateTimeField(required=False, widget=DateTimeInput(), label="Next follow-up")
+    next_followup = PickerDateTimeField(required=False, label="Next follow-up")
     temperature = forms.ChoiceField(choices=Lead.TEMPERATURES, label="Lead temperature")
 
     def clean(self):
@@ -111,6 +268,7 @@ class SiteVisitForm(StyledMixin, forms.ModelForm):
         model = SiteVisit
         fields = ["project", "scheduled_at", "executive"]
         widgets = {"scheduled_at": DateTimeInput()}
+        field_classes = {"scheduled_at": PickerDateTimeField}
         labels = {"scheduled_at": "Date & time"}
 
     def __init__(self, *args, user=None, **kwargs):
@@ -128,11 +286,13 @@ class SiteVisitForm(StyledMixin, forms.ModelForm):
 
 class VisitResultForm(StyledMixin, forms.Form):
     status = forms.ChoiceField(choices=[(SiteVisit.DONE, "Done"), (SiteVisit.NO_SHOW, "No-show"),
-                                        (SiteVisit.CANCELLED, "Cancelled")])
+                                        (SiteVisit.CANCELLED, "Cancelled")], initial=SiteVisit.DONE)
     feedback = forms.CharField(widget=forms.Textarea, required=False, label="Customer feedback")
 
 
-class BookingForm(StyledMixin, forms.ModelForm):
+class BookingForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
+    money_fields = ("deal_value", "booking_amount")
+
     class Meta:
         model = Booking
         fields = ["project", "unit_no", "deal_value", "booking_amount", "booking_date", "notes"]
@@ -170,10 +330,18 @@ class ImportForm(StyledMixin, forms.Form):
         return upload
 
 
-class ProjectForm(StyledMixin, forms.ModelForm):
+class ProjectForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
+    money_fields = ("price_from", "price_to")
+
     class Meta:
         model = Project
         fields = ["name", "location", "property_types", "price_from", "price_to", "brochure_url", "is_active"]
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("price_from") and cleaned.get("price_to") and cleaned["price_from"] > cleaned["price_to"]:
+            self.add_error("price_to", "'Price to' must be higher than 'Price from'.")
+        return cleaned
 
 
 class TeamForm(StyledMixin, forms.ModelForm):
@@ -264,15 +432,25 @@ class TransferForm(StyledMixin, forms.Form):
 class EnquiryForm(forms.Form):
     """Public website form."""
     name = forms.CharField(max_length=120, widget=forms.TextInput(attrs={"class": "input", "placeholder": "Your name"}))
-    phone = PhoneField(label="Mobile number", widget=forms.TextInput(attrs={"class": "input", "placeholder": "10-digit mobile"}))
+    phone_code = forms.ChoiceField(choices=DIAL_CHOICES, initial=DEFAULT_DIAL, widget=forms.Select(attrs={"class": "input"}))
+    phone = PhoneField(label="Mobile number", widget=forms.TextInput(attrs={"class": "input", "placeholder": "Mobile number", "inputmode": "tel"}))
     email = forms.EmailField(required=False, widget=forms.EmailInput(attrs={"class": "input", "placeholder": "Email (optional)"}))
     project = forms.ModelChoiceField(queryset=Project.objects.filter(is_active=True), required=False,
                                      empty_label="Any project", widget=forms.Select(attrs={"class": "input"}))
     property_type = forms.ChoiceField(choices=[("", "Property type")] + Lead.PROPERTY_TYPES, required=False,
                                       widget=forms.Select(attrs={"class": "input"}))
-    budget = forms.ChoiceField(choices=[("", "Budget")] + Lead.BUDGETS, required=False,
-                               widget=forms.Select(attrs={"class": "input"}))
+    currency = forms.ChoiceField(choices=[(code, code) for code, _l in CURRENCY_CHOICES], initial=BASE_CURRENCY,
+                                 widget=forms.Select(attrs={"class": "input"}))
+    budget_amount = forms.DecimalField(required=False, min_value=0, max_digits=14, decimal_places=2,
+                                       widget=forms.NumberInput(attrs={"class": "input", "placeholder": "Budget (optional)"}))
     message = forms.CharField(required=False, max_length=500,
                               widget=forms.Textarea(attrs={"class": "input", "rows": 3, "placeholder": "Anything we should know?"}))
     website = forms.CharField(required=False, widget=forms.TextInput(attrs={"tabindex": "-1", "autocomplete": "off"}))
     consent = forms.BooleanField(label=f"I agree to be contacted by {settings.COMPANY_NAME} by call / WhatsApp.")
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("phone") and cleaned.get("phone_code"):
+            cleaned["phone"] = strip_dial_code(cleaned["phone"], cleaned["phone_code"])
+        cleaned["budget_amount"] = to_base(cleaned.get("budget_amount"), cleaned.get("currency") or BASE_CURRENCY)
+        return cleaned

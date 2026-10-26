@@ -31,6 +31,41 @@
     var dragged = null;
     var modal = document.getElementById('lost-modal'), lostForm = document.getElementById('lost-form');
     var pending = null;
+    var dropBar = document.getElementById('drop-bar');
+    var pointer = null, scrollTimer = null;
+
+    // While a card is dragged, scroll the board sideways (and the page/column up/down) when the pointer
+    // nears an edge, so any stage can be reached from any other in one drag.
+    function autoScroll() {
+      if (!dragged) return;
+      scrollTimer = requestAnimationFrame(autoScroll);
+      if (!pointer) return;
+      var edge = 90, speed = 22, r = board.getBoundingClientRect();
+      if (pointer.y > r.top && pointer.y < r.bottom) {
+        if (pointer.x < r.left + edge) board.scrollLeft -= speed * (1 - Math.max(pointer.x - r.left, 0) / edge);
+        else if (pointer.x > r.right - edge) board.scrollLeft += speed * (1 - Math.max(r.right - pointer.x, 0) / edge);
+      }
+      if (pointer.y < edge) window.scrollBy(0, -speed);
+      else if (pointer.y > window.innerHeight - edge - (dropBar ? dropBar.offsetHeight : 0)) window.scrollBy(0, speed);
+      var under = document.elementFromPoint(pointer.x, pointer.y), body = under && under.closest('.col-body');
+      if (body) {
+        var b = body.getBoundingClientRect();
+        if (pointer.y < b.top + 40) body.scrollTop -= speed / 2;
+        else if (pointer.y > b.bottom - 40) body.scrollTop += speed / 2;
+      }
+    }
+    document.addEventListener('dragover', function (e) {
+      if (dragged) pointer = {x: e.clientX, y: e.clientY};
+    });
+
+    function endDrag() {
+      if (dragged) dragged.classList.remove('dragging');
+      dragged = null;
+      pointer = null;
+      if (scrollTimer) cancelAnimationFrame(scrollTimer);
+      if (dropBar) dropBar.classList.remove('show');
+      document.querySelectorAll('.drag-over').forEach(function (c) { c.classList.remove('drag-over'); });
+    }
 
     board.addEventListener('dragstart', function (e) {
       var card = e.target.closest('.lead-card');
@@ -39,10 +74,23 @@
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', card.dataset.id);
+      if (dropBar) {
+        var from = card.closest('.col').dataset.stage;
+        dropBar.querySelectorAll('.drop-chip').forEach(function (c) { c.classList.toggle('current', c.dataset.stage === from); });
+        dropBar.classList.add('show');
+      }
+      scrollTimer = requestAnimationFrame(autoScroll);
     });
-    board.addEventListener('dragend', function () {
-      if (dragged) dragged.classList.remove('dragging');
-      document.querySelectorAll('.col.drag-over').forEach(function (c) { c.classList.remove('drag-over'); });
+    board.addEventListener('dragend', endDrag);
+    if (dropBar) dropBar.querySelectorAll('.drop-chip').forEach(function (chip) {
+      chip.addEventListener('dragover', function (e) { e.preventDefault(); chip.classList.add('drag-over'); });
+      chip.addEventListener('dragleave', function () { chip.classList.remove('drag-over'); });
+      chip.addEventListener('drop', function (e) {
+        e.preventDefault();
+        var card = dragged, col = board.querySelector('.col[data-stage="' + chip.dataset.stage + '"]');
+        endDrag();
+        if (card && col) moveCard(card, col);
+      });
     });
     document.querySelectorAll('.col').forEach(function (col) {
       col.addEventListener('dragover', function (e) { e.preventDefault(); col.classList.add('drag-over'); });
@@ -50,7 +98,9 @@
       col.addEventListener('drop', function (e) {
         e.preventDefault();
         col.classList.remove('drag-over');
-        if (dragged) moveCard(dragged, col);
+        var card = dragged;
+        endDrag();
+        if (card) moveCard(card, col);
       });
     });
 
@@ -107,15 +157,17 @@
   }
 
   function initDuplicateCheck(url) {
-    var input = document.getElementById('id_phone'), hint = document.getElementById('dup-hint');
+    var input = document.getElementById('id_phone'), code = document.getElementById('id_phone_code'),
+        hint = document.getElementById('dup-hint');
     if (!input || !hint) return;
     var timer;
-    input.addEventListener('input', function () {
+    function check() {
       clearTimeout(timer);
       timer = setTimeout(function () {
         var digits = input.value.replace(/\D/g, '');
-        if (digits.length < 10) { hint.className = 'dup-hint'; return; }
-        fetch(url + '?phone=' + encodeURIComponent(input.value), {credentials: 'same-origin'})
+        if (digits.length < 6) { hint.className = 'dup-hint'; return; }
+        var q = '?phone=' + encodeURIComponent(input.value) + (code ? '&code=' + encodeURIComponent(code.value) : '');
+        fetch(url + q, {credentials: 'same-origin'})
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (!d.exists) { hint.className = 'dup-hint'; return; }
@@ -126,6 +178,205 @@
             hint.className = 'dup-hint show';
           });
       }, 350);
+    }
+    input.addEventListener('input', check);
+    if (code) code.addEventListener('change', check);
+  }
+
+  // Searchable dropdown that also accepts free text. Clicking the field or the arrow always lists every option,
+  // even when a value is already chosen; typing filters the list.
+  function combobox(input, getOptions, onPick) {
+    var wrap = document.createElement('div');
+    wrap.className = 'combo';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'combo-toggle';
+    toggle.tabIndex = -1;
+    toggle.setAttribute('aria-label', 'Show options');
+    toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+    var list = document.createElement('ul');
+    list.className = 'combo-list';
+    list.setAttribute('role', 'listbox');
+    wrap.appendChild(toggle);
+    wrap.appendChild(list);
+    input.setAttribute('role', 'combobox');
+    var active = -1, closeTimer = null;
+
+    function render(filter) {
+      clearTimeout(closeTimer);
+      var q = (filter || '').trim().toLowerCase(), current = input.value.trim().toLowerCase();
+      var items = getOptions().filter(function (v) { return !q || v.toLowerCase().indexOf(q) !== -1; });
+      list.textContent = '';
+      active = -1;
+      if (!items.length) {
+        var empty = document.createElement('li');
+        empty.className = 'combo-empty';
+        empty.textContent = input.value.trim() ? 'No match: "' + input.value.trim() + '" will be saved as typed' : 'No suggestions';
+        list.appendChild(empty);
+      }
+      items.forEach(function (v, i) {
+        var li = document.createElement('li');
+        li.textContent = v;
+        li.setAttribute('role', 'option');
+        if (v.toLowerCase() === current) { li.className = 'selected'; active = i; }
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); pick(v); });
+        list.appendChild(li);
+      });
+      wrap.classList.add('open');
+      highlight();
+    }
+    function close() { wrap.classList.remove('open'); }
+    function highlight() {
+      var lis = list.querySelectorAll('li[role=option]');
+      lis.forEach(function (li, i) { li.classList.toggle('active', i === active); });
+      if (lis[active]) lis[active].scrollIntoView({block: 'nearest'});
+    }
+    function pick(v) {
+      setValue(input, v);
+      input.dispatchEvent(new Event('change', {bubbles: true}));
+      close();
+      if (onPick) onPick(v);
+    }
+    input.addEventListener('focus', function () { render(''); });
+    input.addEventListener('click', function () { if (!wrap.classList.contains('open')) render(''); });
+    input.addEventListener('input', function () { render(input.value); });
+    input.addEventListener('blur', function () { closeTimer = setTimeout(close, 120); if (onPick) onPick(input.value); });
+    toggle.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      if (input.disabled) return;
+      if (wrap.classList.contains('open')) { close(); } else { input.focus(); render(''); }
+    });
+    input.addEventListener('keydown', function (e) {
+      var lis = list.querySelectorAll('li[role=option]');
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (!wrap.classList.contains('open')) render(''); active = Math.min(active + 1, lis.length - 1); highlight(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); highlight(); }
+      else if (e.key === 'Enter' && wrap.classList.contains('open') && lis[active]) { e.preventDefault(); pick(lis[active].textContent); }
+      else if (e.key === 'Escape') { close(); }
+    });
+  }
+
+  function setValue(el, value) {
+    el.value = value;
+    if (el._syncClear) el._syncClear();
+  }
+
+  // Small × that empties a dropdown; selects without a blank option get one so they can be emptied.
+  function addClear(el) {
+    if (el._syncClear) return;
+    var wrap = el.parentNode;
+    if (!wrap.classList.contains('combo')) {
+      wrap = document.createElement('div');
+      wrap.className = 'clearable';
+      el.parentNode.insertBefore(wrap, el);
+      wrap.appendChild(el);
+    }
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'clear-x';
+    x.tabIndex = -1;
+    x.setAttribute('aria-label', 'Clear');
+    x.innerHTML = '&times;';
+    wrap.appendChild(x);
+    el._syncClear = function () { wrap.classList.toggle('filled', !!el.value && !el.disabled); };
+    x.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var isSelect = el.tagName === 'SELECT';
+      if (isSelect && !Array.prototype.some.call(el.options, function (o) { return o.value === ''; })) {
+        el.insertBefore(new Option('Select…', ''), el.firstChild);
+      }
+      el.value = '';
+      el.dispatchEvent(new Event(isSelect ? 'change' : 'input', {bubbles: true}));
+      el._syncClear();
+      if (!isSelect) el.focus();
+    });
+    el.addEventListener('change', el._syncClear);
+    el.addEventListener('input', el._syncClear);
+    el._syncClear();
+  }
+
+  function initClearButtons() {
+    document.querySelectorAll('.field select.input:not([multiple]), .combo > input').forEach(function (el) {
+      // A dropdown with a single real option (e.g. WhatsApp language) has nothing to clear.
+      if (el.tagName === 'SELECT' && Array.prototype.filter.call(el.options, function (o) { return o.value; }).length < 2) return;
+      addClear(el);
+    });
+  }
+
+  // Country -> city -> area: each level unlocks only once its parent is filled, and changing a parent clears
+  // children that no longer belong to it. Country also sets the dial code and currency.
+  function initLocation(dataId) {
+    var el = document.getElementById(dataId);
+    var country = document.getElementById('id_country'), city = document.getElementById('id_city'),
+        area = document.getElementById('id_area'), dial = document.getElementById('id_phone_code'),
+        currency = document.getElementById('id_currency');
+    if (!el || !country || !city || !area) return;
+    var geo = JSON.parse(el.textContent), dialTouched = false;
+
+    function lower(list) { return list.map(function (v) { return v.toLowerCase(); }); }
+    function citiesOf() { var c = geo[country.value]; return c ? Object.keys(c.cities) : []; }
+    function cityKey() {
+      var typed = city.value.trim().toLowerCase();
+      return citiesOf().filter(function (n) { return n.toLowerCase() === typed; })[0];
+    }
+    function areasOf() {
+      var c = geo[country.value], key = cityKey();
+      return c && key ? c.cities[key] : [];
+    }
+    function areaStillValid() {
+      var key = cityKey();
+      return !area.value.trim() || !key || lower(geo[country.value].cities[key]).indexOf(area.value.trim().toLowerCase()) !== -1;
+    }
+    function lockState() {
+      if (!country.value) setValue(city, '');
+      city.disabled = !country.value;
+      city.placeholder = country.value ? 'Select or type a city' : 'Select a country first';
+      if (!city.value.trim()) setValue(area, '');
+      area.disabled = !city.value.trim();
+      area.placeholder = area.disabled ? 'Select a city first' : 'Select or type an area';
+      [city, area].forEach(function (i) { if (i._syncClear) i._syncClear(); });
+    }
+
+    combobox(city, citiesOf, function () {
+      if (!areaStillValid()) setValue(area, '');
+      lockState();
+    });
+    combobox(area, areasOf);
+    city.addEventListener('input', lockState);
+
+    if (dial) dial.addEventListener('change', function (e) { if (e.isTrusted) dialTouched = true; });
+    country.addEventListener('change', function () {
+      if (lower(citiesOf()).indexOf(city.value.trim().toLowerCase()) === -1) {
+        setValue(city, '');
+        setValue(area, '');
+      }
+      var c = geo[country.value];
+      if (c && dial && !dialTouched) {
+        dial.value = c.dial;
+        dial.dispatchEvent(new Event('change'));
+      }
+      if (c && currency) setValue(currency, c.currency);
+      lockState();
+    });
+    lockState();
+  }
+
+  // Picking "Other (type your own)" reveals a required text box for the custom value.
+  function initOtherFields() {
+    ['source', 'property_type', 'project'].forEach(function (name) {
+      var select = document.getElementById('id_' + name), other = document.getElementById('id_' + name + '_other');
+      if (!select || !other) return;
+      var box = other.closest('.field'), label = box.querySelector('label');
+      if (label && !label.querySelector('.req')) label.insertAdjacentHTML('beforeend', ' <span class="req">*</span>');
+      function show(focus) {
+        var on = select.value === 'other';
+        box.style.display = on ? '' : 'none';
+        other.required = on;
+        if (on && focus && !other.value) other.focus();
+      }
+      select.addEventListener('change', function () { show(true); });
+      show(false);
     });
   }
 
@@ -146,6 +397,17 @@
     if (e.key === 'Escape') document.querySelectorAll('.modal.show').forEach(function (m) { m.classList.remove('show'); });
   });
   document.addEventListener('DOMContentLoaded', initBulk);
+  document.addEventListener('DOMContentLoaded', initClearButtons);
 
-  window.CRM = {initBoard: initBoard, initDuplicateCheck: initDuplicateCheck, toast: toast};
+  // A field's server error disappears as soon as the user fills it in.
+  function clearFieldError(e) {
+    var field = e.target.closest && e.target.closest('.field.has-error');
+    if (!field || !String(e.target.value || '').trim()) return;
+    field.classList.remove('has-error');
+    field.querySelectorAll('.error').forEach(function (el) { el.remove(); });
+  }
+  document.addEventListener('input', clearFieldError);
+  document.addEventListener('change', clearFieldError);
+
+  window.CRM = {initBoard: initBoard, initDuplicateCheck: initDuplicateCheck, initLocation: initLocation, initOtherFields: initOtherFields, toast: toast};
 })();

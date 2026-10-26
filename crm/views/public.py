@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from ..access import MGMT, role_required
 from ..forms import EnquiryForm
+from ..locale_data import country_for_dial
 from ..models import Lead, Project
 from ..services import capture_lead
 
@@ -37,8 +38,9 @@ def _process(request, channel):
     if not d["website"]:  # honeypot filled in: silently drop bot submissions
         capture_lead(
             {
-                "name": d["name"], "phone": d["phone"], "email": d["email"], "project": d["project"],
-                "property_type": d["property_type"], "budget": d["budget"], "source": "website",
+                "name": d["name"], "phone_code": d["phone_code"], "phone": d["phone"], "email": d["email"],
+                "country": country_for_dial(d["phone_code"]), "project": d["project"],
+                "property_type": d["property_type"], "budget_amount": d["budget_amount"], "source": "website",
                 "notes": d["message"], "temperature": Lead.WARM,
             },
             channel=channel,

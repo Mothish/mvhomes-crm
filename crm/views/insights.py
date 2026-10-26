@@ -1,13 +1,15 @@
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from ..access import EXECUTIVE, LEADER, MGMT, SALES_ROLES, get_role, role_required, visible_leads, visible_users
+from ..locale_data import BASE_CURRENCY, CURRENCIES, from_base, to_base
 from ..models import Activity, AdSpend, Booking, Lead, Project, SiteVisit, Target, month_start
 
 PERIODS = [("month", "This month"), ("last_month", "Last month"), ("30", "Last 30 days"), ("90", "Last 90 days")]
@@ -124,7 +126,7 @@ def home(request):
     now = timezone.now()
     open_leads = scope.filter(stage__in=Lead.OPEN_STAGES)
 
-    by_source = list(leads_p.values("source").annotate(c=Count("id")).order_by("-c"))
+    by_source = list(leads_p.values("source", "source_other").annotate(c=Count("id")).order_by("-c"))
     src_labels = dict(Lead.SOURCES)
     by_project = list(
         leads_p.values("project__name").annotate(c=Count("id"), booked=Count("id", filter=Q(stage=Lead.BOOKED)))
@@ -157,7 +159,8 @@ def home(request):
             "funnel": funnel(leads_p),
             "team": team,
             "charts": {
-                "source": {"labels": [src_labels[r["source"]] for r in by_source], "values": [r["c"] for r in by_source]},
+                "source": {"labels": [r["source_other"] or src_labels[r["source"]] for r in by_source],
+                           "values": [r["c"] for r in by_source]},
                 "project": {"labels": [r["project__name"] or "Not decided" for r in by_project],
                             "leads": [r["c"] for r in by_project], "booked": [r["booked"] for r in by_project]},
                 "trend": daily_trend(scope, start, end),
@@ -241,10 +244,23 @@ def reports(request):
         while m <= end:
             months.append(m)
             m = month_start(m + timedelta(days=32))
-        spend = dict(AdSpend.objects.filter(month__in=months).values_list("source").annotate(t=Sum("amount")).order_by())
+        spend = {}
+        for src, custom, total in (AdSpend.objects.filter(month__in=months).values_list("source", "custom_source")
+                                   .annotate(t=Sum("amount")).order_by()):
+            key = f"other:{custom.lower()}" if custom else src
+            spend[key] = spend.get(key, Decimal("0")) + total
         rows = []
-        for key, label in Lead.SOURCES:
-            src = cohort.filter(source=key)
+        groups = [(key, label, {"source": key}) for key, label in Lead.SOURCES if key != "other"]
+        groups.append(("other", "Other", {"source": "other", "source_other": ""}))
+        names = {}
+        for name in cohort.filter(source="other").exclude(source_other="").values_list("source_other", flat=True):
+            names.setdefault(name.lower(), name)
+        for name in AdSpend.objects.filter(month__in=months).exclude(custom_source="").values_list("custom_source", flat=True):
+            names.setdefault(name.lower(), name)
+        for low, name in names.items():
+            groups.append((f"other:{low}", f"{name} (custom)", {"source": "other", "source_other__iexact": name}))
+        for key, label, lookup in groups:
+            src = cohort.filter(**lookup)
             n = src.count()
             booked = src.filter(stage=Lead.BOOKED)
             nb = booked.count()
@@ -281,30 +297,52 @@ def ad_spend(request):
     except ValueError:
         month = month_start(today)
     if request.method == "POST":
-        saved = 0
-        for key, _ in Lead.SOURCES:
-            raw = request.POST.get(f"amount_{key}", "").replace(",", "").strip()
+        currency = request.POST.get("currency")
+        currency = currency if currency in CURRENCIES else BASE_CURRENCY
+        entries = [(key, "", request.POST.get(f"amount_{key}", "")) for key, _ in Lead.SOURCES if key != "other"]
+        entries += [("other", name.strip()[:60], raw) for name, raw in
+                    zip(request.POST.getlist("custom_name"), request.POST.getlist("custom_amount")) if name.strip()]
+        labels = dict(Lead.SOURCES)
+        parsed = {}
+        for key, name, raw in entries:
+            raw = raw.replace(",", "").strip()
             if raw == "":
-                AdSpend.objects.filter(month=month, source=key).delete()
                 continue
             try:
                 amount = Decimal(raw)
                 if amount < 0:
                     raise ValueError
-            except Exception:
-                messages.error(request, f"Invalid amount for {dict(Lead.SOURCES)[key]}.")
+            except (InvalidOperation, ValueError):
+                messages.error(request, f"Invalid amount for {name or labels[key]}.")
                 return redirect(f"{request.path}?month={month:%Y-%m}")
-            AdSpend.objects.update_or_create(month=month, source=key, defaults={"amount": amount})
-            saved += 1
+            parsed[(key, name.lower())] = (key, name, to_base(amount, currency))
+        with transaction.atomic():
+            AdSpend.objects.filter(month=month).delete()
+            AdSpend.objects.bulk_create([AdSpend(month=month, source=k, custom_source=n, amount=a)
+                                         for k, n, a in parsed.values()])
         messages.success(request, f"Ad spend saved for {month:%B %Y}.")
         return redirect(f"{request.path}?month={month:%Y-%m}")
-    spend = dict(AdSpend.objects.filter(month=month).values_list("source", "amount"))
+    entries = AdSpend.objects.filter(month=month)
+    spend = {s.source: s.amount for s in entries if not s.custom_source}
     end = (month_start(month + timedelta(days=32)) - timedelta(days=1))
-    leads = dict(Lead.objects.filter(created_at__date__range=(month, end)).values_list("source").annotate(c=Count("id")).order_by())
-    rows = [{"key": k, "label": v, "amount": spend.get(k), "leads": leads.get(k, 0),
-             "cpl": spend[k] / leads[k] if spend.get(k) and leads.get(k) else None} for k, v in Lead.SOURCES]
-    return render(request, "crm/ad_spend.html", {"rows": rows, "month": month,
-                                                 "total": sum(spend.values(), Decimal("0"))})
+    month_leads = Lead.objects.filter(created_at__date__range=(month, end))
+    leads = dict(month_leads.values_list("source").annotate(c=Count("id")).order_by())
+    rows = [{"key": k, "label": v, "amount_display": from_base(spend.get(k)), "leads": leads.get(k, 0),
+             "cpl": spend[k] / leads[k] if spend.get(k) and leads.get(k) else None}
+            for k, v in Lead.SOURCES if k != "other"]
+    custom = {}
+    for name in Lead.objects.filter(source="other").exclude(source_other="").values_list("source_other", flat=True):
+        custom.setdefault(name.lower(), {"name": name, "amount": None})
+    for s in entries:
+        if s.custom_source:
+            custom.setdefault(s.custom_source.lower(), {"name": s.custom_source})["amount"] = s.amount
+    custom_rows = []
+    for c in sorted(custom.values(), key=lambda c: c["name"].lower()):
+        n = month_leads.filter(source="other", source_other__iexact=c["name"]).count()
+        custom_rows.append({"name": c["name"], "amount_display": from_base(c["amount"]), "leads": n,
+                            "cpl": c["amount"] / n if c["amount"] and n else None})
+    return render(request, "crm/ad_spend.html", {"rows": rows, "custom_rows": custom_rows, "month": month,
+                                                 "total": sum((s.amount for s in entries), Decimal("0"))})
 
 
 @role_required(*MGMT, LEADER)

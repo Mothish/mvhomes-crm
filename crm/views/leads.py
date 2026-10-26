@@ -17,7 +17,10 @@ from ..access import (
     ADMIN, LEADER, MANAGER, MGMT, SALES_ROLES, assignable_users, can_view_lead, get_role, role_required,
     visible_leads, visible_users,
 )
-from ..forms import ActivityForm, ImportForm, LeadForm, LostForm, ReassignForm
+from ..forms import ActivityForm, ImportForm, LeadForm, LostForm, ReassignForm, strip_dial_code
+from ..locale_data import (
+    BASE_CURRENCY, CURRENCIES, DEFAULT_COUNTRY, DEFAULT_DIAL, country_code, dial_for, geo_data, to_base,
+)
 from ..messaging import lead_previews
 from ..models import Lead, Project, normalize_phone
 from ..services import assign, audit, capture_lead, log_activity, set_stage
@@ -135,15 +138,17 @@ def lead_create(request):
                                       f"{lead.owner.get_full_name() if lead.owner else 'another team'}. "
                                       "The re-enquiry was recorded and they have been notified.")
             return redirect("lead_list")
-    return render(request, "crm/leads/form.html", {"form": form})
+    return render(request, "crm/leads/form.html", {"form": form, "geo": geo_data()})
 
 
 @role_required(*SALES_ROLES)
 def lead_check_phone(request):
     phone = normalize_phone(request.GET.get("phone", ""))
-    if len(phone) < 10:
+    code = request.GET.get("code") or DEFAULT_DIAL
+    phone = strip_dial_code(phone, code)
+    if len(phone) < 6:
         return JsonResponse({"exists": False})
-    lead = Lead.objects.select_related("owner").filter(phone=phone).first()
+    lead = Lead.objects.select_related("owner").filter(phone_code=code, phone=phone).first()
     if not lead:
         return JsonResponse({"exists": False})
     data = {"exists": True, "owner": lead.owner.get_full_name() if lead.owner else "Unassigned"}
@@ -186,14 +191,14 @@ def lead_edit(request, pk):
             audit(request.user, "update", lead, f"{lead.name}: changed {', '.join(form.changed_data)}")
         messages.success(request, "Lead updated.")
         return redirect("lead_detail", pk=pk)
-    return render(request, "crm/leads/form.html", {"form": form, "lead": lead})
+    return render(request, "crm/leads/form.html", {"form": form, "lead": lead, "geo": geo_data()})
 
 
 @role_required(ADMIN)
 @require_POST
 def lead_delete(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
-    audit(request.user, "delete", lead, f"Deleted lead {lead.name} ({lead.phone})")
+    audit(request.user, "delete", lead, f"Deleted lead {lead.name} ({lead.full_phone})")
     lead.delete()
     messages.success(request, f"Lead {lead.name} deleted.")
     return redirect("lead_list")
@@ -284,8 +289,8 @@ def lead_bulk_assign(request):
 
 # ---------------------------------------------------------------- import / export
 
-IMPORT_COLUMNS = ["Name", "Phone", "Alternate Phone", "Email", "Area", "Budget", "Property Type", "Project",
-                  "Source", "Notes"]
+IMPORT_COLUMNS = ["Name", "Country Code", "Phone", "Alternate Phone", "Email", "Country", "City", "Area",
+                  "Budget", "Currency", "Property Type", "Project", "Source", "Notes"]
 
 
 def _choice(value, choices, default=""):
@@ -352,15 +357,35 @@ def lead_import(request):
                 try:
                     project_name = get("Project")
                     project = projects.get(project_name.lower()) if project_name else None
-                    if project_name and not project:
-                        raise ValueError(f"Unknown project '{project_name}'")
+                    project_other = project_name[:100] if project_name and not project else ""
+                    country = country_code(get("Country")) if get("Country") else DEFAULT_COUNTRY
+                    if not country:
+                        raise ValueError(f"Unknown country '{get('Country')}'")
+                    dial = "+" + normalize_phone(get("Country Code")) if get("Country Code") else dial_for(country)
+                    currency = (get("Currency") or BASE_CURRENCY).upper()
+                    if currency not in CURRENCIES:
+                        raise ValueError(f"Currency must be one of {', '.join(CURRENCIES)}")
+                    budget = get("Budget").replace(",", "")
+                    try:
+                        source, source_other = _choice(get("Source"), Lead.SOURCES, "other"), ""
+                    except ValueError:
+                        source, source_other = "other", get("Source")[:60]
+                    try:
+                        ptype, ptype_other = _choice(get("Property Type"), Lead.PROPERTY_TYPES), ""
+                    except ValueError:
+                        ptype, ptype_other = "other", get("Property Type")[:60]
                     data = {
-                        "name": get("Name"), "phone": get("Phone"), "alt_phone": normalize_phone(get("Alternate Phone")),
-                        "email": get("Email"), "area": get("Area"), "budget": _choice(get("Budget"), Lead.BUDGETS),
-                        "property_type": _choice(get("Property Type"), Lead.PROPERTY_TYPES), "project": project,
-                        "source": _choice(get("Source"), Lead.SOURCES, "other"), "notes": get("Notes"),
+                        "name": get("Name"), "phone_code": dial, "phone": strip_dial_code(normalize_phone(get("Phone")), dial),
+                        "alt_phone": normalize_phone(get("Alternate Phone")), "email": get("Email"),
+                        "country": country, "city": get("City"), "area": get("Area"),
+                        "budget_amount": to_base(budget, currency) if budget else None,
+                        "property_type": ptype, "property_type_other": ptype_other,
+                        "project": project, "project_other": project_other,
+                        "source": source, "source_other": source_other, "notes": get("Notes"),
                     }
-                    if not data["name"] or len(normalize_phone(data["phone"])) < 10:
+                    if budget and data["budget_amount"] is None:
+                        raise ValueError(f"Budget '{budget}' is not a number")
+                    if not data["name"] or len(data["phone"]) < 6:
                         raise ValueError("Name and a valid phone are required")
                     _, created = capture_lead(data, user=request.user, channel="Excel import")
                     result["created" if created else "duplicates"] += 1
@@ -378,8 +403,9 @@ def lead_import_template(request):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(IMPORT_COLUMNS)
-    ws.append(["Ramesh Kumar", "9840012345", "", "ramesh@example.com", "Velachery", "₹75 L - 1 Cr", "3 BHK",
-               Project.objects.values_list("name", flat=True).first() or "", "99acres", "Wants east facing"])
+    ws.append(["Ahmed Al-Mansoori", "+974", "55123456", "", "ahmed@example.com", "Qatar", "Lusail", "Marina District",
+               "1800000", "QAR", "2 Bedroom", Project.objects.values_list("name", flat=True).first() or "",
+               "Property Finder", "Wants sea view"])
     buf = io.BytesIO()
     wb.save(buf)
     response = HttpResponse(buf.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -393,13 +419,14 @@ def lead_export(request):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Leads"
-    ws.append(["Name", "Phone", "Email", "Area", "Project", "Property type", "Budget", "Source", "Stage", "Temperature",
-               "Owner", "Next follow-up", "Lost reason", "Enquiries", "Created"])
+    ws.append(["Name", "Phone", "Email", "Country", "City", "Area", "Project", "Property type", f"Budget ({BASE_CURRENCY})",
+               "Source", "Stage", "Temperature", "Owner", "Next follow-up", "Lost reason", "Enquiries", "Created"])
     count = 0
     for lead in leads.order_by("-created_at").iterator():
         ws.append([
-            lead.name, lead.phone, lead.email, lead.area, lead.project.name if lead.project else "",
-            lead.get_property_type_display(), lead.get_budget_display(), lead.get_source_display(),
+            lead.name, lead.full_phone, lead.email, lead.get_country_display(), lead.city, lead.area,
+            lead.project_label, lead.get_property_type_display(),
+            float(lead.budget_amount) if lead.budget_amount is not None else "", lead.get_source_display(),
             lead.get_stage_display(), lead.get_temperature_display(),
             lead.owner.get_full_name() if lead.owner else "",
             timezone.localtime(lead.next_followup).strftime("%d-%m-%Y %H:%M") if lead.next_followup else "",

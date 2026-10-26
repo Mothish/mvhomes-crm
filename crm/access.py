@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 
+from .locale_data import CURRENCY_CHOICES, current_currency
 from .models import Lead, Notification, Profile
 
 ADMIN, MANAGER, LEADER, EXECUTIVE = Profile.ADMIN, Profile.MANAGER, Profile.LEADER, Profile.EXECUTIVE
@@ -100,12 +101,24 @@ def access_context(request):
     return ctx
 
 
+def _asset_version():
+    # Changes whenever app.js/app.css change, so browsers never run a stale cached copy.
+    root = settings.BASE_DIR / "static"
+    try:
+        return int(max((root / "js/app.js").stat().st_mtime, (root / "css/app.css").stat().st_mtime))
+    except OSError:
+        return 0
+
+
 def brand_context(request):
     return {
+        "asset_version": _asset_version(),
         "company": settings.COMPANY_NAME,
         "brand_mark": settings.BRAND_MARK,
         "brand_word": settings.BRAND_WORD,
         "company_tagline": settings.COMPANY_TAGLINE,
         "company_phone": settings.COMPANY_PHONE,
         "company_website": settings.COMPANY_WEBSITE,
+        "currency": current_currency.get(),
+        "currency_choices": CURRENCY_CHOICES,
     }

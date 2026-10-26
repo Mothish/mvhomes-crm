@@ -5,7 +5,12 @@
   <div>
     <a class="crumb" href="{% if lead %}{% url 'lead_detail' lead.pk %}{% else %}{% url 'lead_list' %}{% endif %}">← {% if lead %}{{ lead.name }}{% else %}Leads{% endif %}</a>
     <h1>{% if lead %}Edit lead{% else %}New lead{% endif %}</h1>
-    {% if not lead %}<p>Takes under 30 seconds. Only name, phone and source are required. Duplicates are detected automatically.</p>{% endif %}
+    {% if not lead %}<p>Takes under 30 seconds. Only name, mobile and source are required. Pick a city and area from the list or type your own. Duplicates are detected automatically.</p>{% endif %}
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-secondary btn-sm clear-form" href="{{ request.path }}" title="{% if lead %}Undo all unsaved changes{% else %}Clear every field and start again{% endif %}"
+       onclick="return confirm('{% if lead %}Discard your unsaved changes?{% else %}Clear the form and start again?{% endif %}')">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>{% if lead %}Reset{% else %}Clear form{% endif %}</a>
   </div>
 </div>
 <form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
@@ -15,5 +20,6 @@
     <button class="btn btn-primary" type="submit">{% if lead %}Save changes{% else %}Create lead{% endif %}</button>
   </div>
 </form>
+{{ geo|json_script:"geo-data" }}
 {% endblock %}
-{% block scripts %}{% if not lead %}<script>CRM.initDuplicateCheck("{% url 'lead_check_phone' %}");</script>{% endif %}{% endblock %}
+{% block scripts %}<script>CRM.initLocation("geo-data"); CRM.initOtherFields();{% if not lead %} CRM.initDuplicateCheck("{% url 'lead_check_phone' %}");{% endif %}</script>{% endblock %}

@@ -43,7 +43,7 @@
       {% if recent %}
       <div class="table-wrap"><table class="table"><tbody>
         {% for lead in recent %}<tr>
-          <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a><div class="muted small">{{ lead.project.name|default:"Any project" }} · {{ lead.created_at|timesince }} ago</div></td>
+          <td><a href="{% url 'lead_detail' lead.pk %}"><strong>{{ lead.name }}</strong></a><div class="muted small">{{ lead.project_label|default:"Any project" }} · {{ lead.created_at|timesince }} ago</div></td>
           <td><span class="badge b-{{ lead.stage|stage_color }}">{{ lead.get_stage_display }}</span></td>
           <td><div class="who"><span class="avatar avatar-sm">{{ lead.owner|initials }}</span><span class="small">{{ lead.owner|person }}</span></div></td>
           <td class="small">{% if lead.first_response_at %}<span class="text-green">Called in {{ lead.response_minutes|minutes }}</span>{% else %}<span class="text-red">Not contacted</span>{% endif %}</td>

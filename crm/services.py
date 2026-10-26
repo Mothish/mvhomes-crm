@@ -3,6 +3,7 @@ from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone
 
+from .locale_data import DEFAULT_DIAL
 from .models import Activity, Assignment, AuditLog, Lead, Notification, Profile, normalize_phone
 
 
@@ -111,7 +112,9 @@ def auto_assign(lead, by_user=None):
 def capture_lead(data, user=None, channel=""):
     """Create a lead or, if the phone already exists, record a re-enquiry. Returns (lead, created)."""
     phone = normalize_phone(data["phone"])
-    existing = Lead.objects.select_for_update().filter(phone=phone).first()
+    phone_code = data.get("phone_code") or DEFAULT_DIAL
+    data.pop("currency", None)
+    existing = Lead.objects.select_for_update().filter(phone_code=phone_code, phone=phone).first()
     if existing:
         existing.enquiry_count += 1
         existing.last_enquiry_at = timezone.now()
@@ -129,7 +132,7 @@ def capture_lead(data, user=None, channel=""):
         return existing, False
 
     owner = data.pop("owner", None)
-    lead = Lead(**{**data, "phone": phone}, created_by=user)
+    lead = Lead(**{**data, "phone": phone, "phone_code": phone_code}, created_by=user)
     lead.full_clean()
     lead.save()
     Activity.objects.create(
@@ -141,7 +144,7 @@ def capture_lead(data, user=None, channel=""):
     else:
         auto_assign(lead)
     if user:
-        audit(user, "create", lead, f"Lead {lead.name} ({lead.phone}) created")
+        audit(user, "create", lead, f"Lead {lead.name} ({lead.full_phone}) created")
     return lead, True
 
 

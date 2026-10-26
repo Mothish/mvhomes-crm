@@ -10,7 +10,7 @@
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
   <title>{% block title %}{% endblock %} · {{ company }} CRM</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ asset_version }}">
 </head>
 <body>
 {% if user.is_authenticated and role %}
@@ -58,6 +58,12 @@
         <input class="input" type="search" name="q" placeholder="Search leads by name, phone, area…" value="{{ request.GET.q|default:'' }}">
       </form>
       <div class="top-actions">
+        <form method="post" action="{% url 'set_currency' %}" class="currency-switch" title="Show amounts in">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select class="input input-sm" name="currency" aria-label="Display currency" onchange="this.form.submit()">
+            {% for code, label in currency_choices %}<option value="{{ code }}"{% if code == currency %} selected{% endif %}>{{ code }}</option>{% endfor %}
+          </select>
+        </form>
         <a class="btn btn-primary btn-new" href="{% url 'lead_create' %}"><span>+</span><span class="hide-xs"> New lead</span></a>
         <a class="bell" href="{% url 'notifications' %}" title="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>{% if unread_count %}<span class="dot-count">{{ unread_count }}</span>{% endif %}</a>
       </div>
@@ -80,7 +86,7 @@
 {% else %}
 {% block public %}{% endblock %}
 {% endif %}
-<script src="{% static 'js/app.js' %}"></script>
+<script src="{% static 'js/app.js' %}?v={{ asset_version }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

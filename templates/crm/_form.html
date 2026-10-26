@@ -1,7 +1,7 @@
 {% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
 <div class="form-grid">
   {% for field in form.visible_fields %}
-  <div class="field{% if field.widget_type == 'textarea' or field.widget_type == 'checkboxselectmultiple' or field.widget_type == 'clearablefile' or wide %} span-2{% endif %}{% if field.errors %} has-error{% endif %}">
+  <div class="field field-{{ field.name }}{% if field.widget_type == 'textarea' or field.widget_type == 'checkboxselectmultiple' or field.widget_type == 'clearablefile' or wide %} span-2{% endif %}{% if field.errors %} has-error{% endif %}">
     {% if field.widget_type == 'checkbox' %}
       <label class="check">{{ field }} {{ field.label }}</label>
     {% else %}
