@@ -343,7 +343,7 @@ class ProjectForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
     class Meta:
         model = Project
         fields = ["name", "status", "handover", "country", "city", "area", "location", "latitude", "longitude",
-                  "property_types", "price_from", "price_to", "cover_image_url", "brochure_url", "is_active"]
+                  "property_types", "price_from", "price_to", "is_active"]
         widgets = {
             "city": forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Select or type a city"}),
             "area": forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Select or type an area"}),

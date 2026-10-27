@@ -19,7 +19,7 @@
     <div id="pick-map" class="map map-md"></div>
     <small class="help" id="loc-status">Tip: in Google Maps tap <strong>Share → Copy link</strong> and paste it above. You can also tap the map or drag the pin. City and area fill in automatically.</small>
   </div>
-  <div class="form-actions"><a class="btn btn-secondary" href="{% url 'projects' %}">Cancel</a><button class="btn btn-primary" type="submit">Save project</button></div>
+  <div class="form-actions">{% if not project %}<span class="muted small" style="margin-right:auto">📄 After saving, you'll go straight to uploading the brochure and price list.</span>{% endif %}<a class="btn btn-secondary" href="{% url 'projects' %}">Cancel</a><button class="btn btn-primary" type="submit">{% if project %}Save project{% else %}Save &amp; upload brochure →{% endif %}</button></div>
 </form>
 
 {% if project %}

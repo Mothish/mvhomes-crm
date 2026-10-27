@@ -11,7 +11,6 @@
   {% if thanks %}<div class="alert alert-success">Thank you! {{ agent }} will contact you shortly.</div>{% endif %}
 
   <section class="card share-hero">
-    {% if project.cover_image_url %}<img class="share-cover" src="{{ project.cover_image_url }}" alt="{{ project.name }}" referrerpolicy="no-referrer">{% endif %}
     <div class="card-body">
       <h1>{{ project.name }}</h1>
       <p class="muted">📍 {{ project.place }}{% if project.location and project.location != project.place %} · {{ project.location }}{% endif %}</p>

@@ -54,8 +54,6 @@ class Project(models.Model):
     handover = models.CharField("Handover", max_length=40, blank=True, help_text="e.g. Q4 2027")
     price_from = models.DecimalField("Price from", max_digits=14, decimal_places=2)
     price_to = models.DecimalField("Price to", max_digits=14, decimal_places=2)
-    cover_image_url = models.URLField("Cover image URL", blank=True)
-    brochure_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:

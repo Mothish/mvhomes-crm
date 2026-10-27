@@ -155,8 +155,7 @@ class Command(BaseCommand):
         out = []
         for name, location, types, pfrom, pto, team, city, area, lat, lng, units, status, handover in PROJECTS:
             project, _ = Project.objects.update_or_create(name=name, defaults={
-                "location": location, "property_types": types, "price_from": pfrom, "price_to": pto,
-                "brochure_url": f"https://{settings.COMPANY_WEBSITE}/{name.split()[1].lower()}.pdf", "is_active": True,
+                "location": location, "property_types": types, "price_from": pfrom, "price_to": pto, "is_active": True,
                 "country": "QA", "city": city, "area": area, "latitude": Decimal(lat), "longitude": Decimal(lng),
                 "unit_types": units, "status": status, "handover": handover,
             })

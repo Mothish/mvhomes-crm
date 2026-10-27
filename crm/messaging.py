@@ -57,8 +57,7 @@ def render_message(lead, key, lang, agent=None, brochure=None):
         "name": lead.name.split()[0],
         "project": lead.project_label or ("مشاريعنا" if lang == "ar" else "our projects"),
         "location": project.location if project else "",
-        "brochure": brochure or (project.brochure_url if project and project.brochure_url
-                                 else f"{settings.COMPANY_WEBSITE}/brochure"),
+        "brochure": brochure or f"{settings.COMPANY_WEBSITE}/brochure",
         "agent": (owner.get_full_name() or owner.username) if owner else COMPANY,
         "visit_time": timezone.localtime(visit.scheduled_at).strftime(
             "%d-%m-%Y, %I:%M %p" if lang == "ar" else "%a %d %b, %I:%M %p"
