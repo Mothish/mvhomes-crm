@@ -1,6 +1,4 @@
 from datetime import time
-from decimal import ROUND_HALF_UP, Decimal
-import re
 
 from django import forms
 from django.conf import settings
@@ -334,37 +332,13 @@ class ImportForm(StyledMixin, forms.Form):
         return upload
 
 
-MAPS_COORD_PATTERNS = [
-    r"@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)",
-    r"!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)",
-    r"[?&](?:q|query|ll|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)",
-]
-
-
-def coords_from_maps_link(link):
-    """(lat, lng) from a full Google Maps URL, or None. The URL is only parsed, never fetched."""
-    for pattern in MAPS_COORD_PATTERNS:
-        match = re.search(pattern, link or "")
-        if match:
-            lat, lng = (Decimal(v).quantize(Decimal("0.000001"), ROUND_HALF_UP) for v in match.groups())
-            if -90 <= lat <= 90 and -180 <= lng <= 180:
-                return lat, lng
-    return None
-
-
 class ProjectForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
     money_fields = ("price_from", "price_to")
     unit_types = forms.MultipleChoiceField(
         choices=[(k, v) for k, v in Lead.PROPERTY_TYPES if k != "other"], widget=forms.CheckboxSelectMultiple,
         required=False, label="Unit types available (used to suggest this project to matching leads)",
     )
-    maps_link = forms.CharField(
-        required=False, label="Google Maps link",
-        help_text="Paste the full link from Google Maps to place the pin, or click on the map below.",
-        widget=forms.TextInput(attrs={"placeholder": "https://www.google.com/maps/place/...@25.41,51.50,..."}),
-    )
-    field_order = ["name", "status", "handover", "country", "city", "area", "location", "maps_link",
-                   "latitude", "longitude", "unit_types", "property_types"]
+    field_order = ["name", "status", "handover", "country", "city", "area", "location", "unit_types", "property_types"]
 
     class Meta:
         model = Project
@@ -373,8 +347,8 @@ class ProjectForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
         widgets = {
             "city": forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Select or type a city"}),
             "area": forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Select or type an area"}),
-            "latitude": forms.NumberInput(attrs={"step": "any", "placeholder": "e.g. 25.413000"}),
-            "longitude": forms.NumberInput(attrs={"step": "any", "placeholder": "e.g. 51.509000"}),
+            "latitude": forms.HiddenInput,
+            "longitude": forms.HiddenInput,
         }
 
     def __init__(self, *args, **kwargs):
@@ -389,17 +363,16 @@ class ProjectForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
         cleaned = super().clean()
         if cleaned.get("price_from") and cleaned.get("price_to") and cleaned["price_from"] > cleaned["price_to"]:
             self.add_error("price_to", "'Price to' must be higher than 'Price from'.")
-        link = (cleaned.get("maps_link") or "").strip()
-        if link:
-            coords = coords_from_maps_link(link)
-            if coords:
-                cleaned["latitude"], cleaned["longitude"] = coords
-            else:
-                self.add_error("maps_link", "No location found in this link. Open it in Google Maps and copy the full "
-                                            "address-bar URL (short maps.app.goo.gl links can't be read).")
         if (cleaned.get("latitude") is None) != (cleaned.get("longitude") is None):
-            self.add_error("longitude", "Enter both latitude and longitude, or neither.")
+            self.add_error(None, "The map pin is incomplete. Set the project location again.")
         return cleaned
+
+    def _post_clean(self):
+        super()._post_clean()
+        # The pin's coordinates are hidden inputs, so their errors must be shown at the top of the form.
+        hidden_errors = [self.errors.pop(name, None) for name in ("latitude", "longitude")]
+        if any(hidden_errors):
+            self.add_error(None, "The map pin is invalid. Set the project location again.")
 
     def save(self, commit=True):
         project = super().save(commit=False)

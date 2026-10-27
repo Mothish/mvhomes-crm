@@ -3,9 +3,11 @@ from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Max, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from .. import geo
 from ..access import ADMIN, post_only, role_required
 from ..forms import ProjectDocumentForm, ProjectForm, TeamForm, TransferForm, UserForm
 from ..locale_data import geo_data
@@ -90,13 +92,29 @@ def _project_form(request, instance=None):
     if request.method == "POST" and form.is_valid():
         project = form.save()
         audit(request.user, "update" if instance else "create", project, f"Saved project {project.name}")
-        messages.success(request, f"Project {project.name} saved.")
-        return redirect("projects")
+        if instance:
+            messages.success(request, f"Project {project.name} saved.")
+            return redirect("projects")
+        messages.success(request, f"Project {project.name} created. Now upload its brochure and price list below "
+                                  "so sales can share them.")
+        return redirect(reverse("project_edit", args=[project.pk]) + "#documents")
     return render(request, "crm/manage/project_form.html", {
         "form": form, "project": instance, "geo": geo_data(),
         "documents": instance.documents.select_related("uploaded_by") if instance else [],
         "doc_form": ProjectDocumentForm() if instance else None,
     })
+
+
+@role_required(ADMIN)
+def resolve_maps_link(request):
+    try:
+        coords = geo.resolve_maps_link(request.GET.get("url", "")[:2000])
+    except geo.LinkUnreachable:
+        return JsonResponse({"ok": False, "error": "Couldn't open this link from the server. Search the place name instead."})
+    if not coords:
+        return JsonResponse({"ok": False, "error": "No location found in this link. In Google Maps open the exact place, "
+                                                  "tap Share → Copy link and paste it again, or search the place name."})
+    return JsonResponse({"ok": True, "lat": float(coords[0]), "lng": float(coords[1])})
 
 
 @role_required(ADMIN)

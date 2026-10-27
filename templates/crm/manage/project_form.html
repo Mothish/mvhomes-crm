@@ -3,13 +3,21 @@
 {% block extra_head %}{% include "crm/_leaflet.html" %}{% endblock %}
 {% block content %}
 <div class="page-head"><div><a class="crumb" href="{% url 'projects' %}">← Projects</a><h1>{% if project %}Edit {{ project.name }}{% else %}Add project{% endif %}</h1>
-  <p>Location, unit types and price range drive the automatic property suggestions on each lead and the projects map.</p></div></div>
+  <p>Location, unit types and price range drive the automatic property suggestions on each lead and the projects map.</p></div>
+  {% if project %}<a class="btn btn-secondary" href="#documents">📄 Brochure &amp; documents ({{ documents|length }})</a>{% endif %}
+</div>
 <form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
   {% include "crm/_form.html" %}
-  <div class="field span-2" style="margin-top:14px">
-    <label>Pin on map</label>
+  <div class="field span-2 loc-picker" id="loc-picker" data-resolve-url="{% url 'resolve_maps_link' %}">
+    <label for="loc-input">Project location on map</label>
+    <div class="loc-tools">
+      <input class="input" id="loc-input" autocomplete="off" placeholder="Paste a Google Maps link, or type a place (e.g. Lusail Marina)">
+      <button class="btn btn-secondary" type="button" id="loc-find">Find</button>
+      <button class="btn btn-secondary" type="button" id="loc-me" title="Use this device's location (when you are at the site)">📍 My location</button>
+    </div>
+    <ul class="loc-results" id="loc-results" hidden></ul>
     <div id="pick-map" class="map map-md"></div>
-    <small class="help">Click on the map or drag the pin. Latitude and longitude fill in automatically.</small>
+    <small class="help" id="loc-status">Tip: in Google Maps tap <strong>Share → Copy link</strong> and paste it above. You can also tap the map or drag the pin. City and area fill in automatically.</small>
   </div>
   <div class="form-actions"><a class="btn btn-secondary" href="{% url 'projects' %}">Cancel</a><button class="btn btn-primary" type="submit">Save project</button></div>
 </form>

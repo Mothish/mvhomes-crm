@@ -45,6 +45,7 @@ urlpatterns = [
     path("manage/teams/new/", manage.team_create, name="team_create"),
     path("manage/projects/", manage.projects, name="projects"),
     path("manage/projects/new/", manage.project_create, name="project_create"),
+    path("manage/projects/resolve-link/", manage.resolve_maps_link, name="resolve_maps_link"),
     path("manage/projects/<int:pk>/", manage.project_edit, name="project_edit"),
     path("manage/projects/<int:pk>/documents/", manage.project_doc_add, name="project_doc_add"),
     path("manage/documents/<int:pk>/", sharing.project_doc_open, name="project_doc_open"),

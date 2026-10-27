@@ -11,7 +11,7 @@
       <div class="small muted">{{ s.project.place }} · {{ s.project.price_from|money_short }} – {{ s.project.price_to|money_short }} · {{ s.project.get_status_display }}{% if s.project.handover %} ({{ s.project.handover }}){% endif %}</div>
       <div class="sg-chips">{% for r in s.reasons %}<span class="badge b-green">✓ {{ r }}</span>{% endfor %}{% for w in s.warnings %}<span class="badge b-amber">! {{ w }}</span>{% endfor %}</div>
       {% if s.docs %}<div class="sg-docs">{% for d in s.docs %}<label class="check small"><input type="checkbox" name="documents" value="{{ d.pk }}" checked> {{ d.title }}</label>{% endfor %}</div>
-      {% else %}<div class="small muted">No documents uploaded yet, so the client gets the project page only.</div>{% endif %}
+      {% else %}<div class="small muted">No documents uploaded yet, so the client gets the project page only.{% if is_admin %} <a href="{% url 'project_edit' s.project.pk %}#documents">Upload brochure →</a>{% endif %}</div>{% endif %}
       <div><button class="btn btn-wa btn-sm" type="submit">Share on WhatsApp</button></div>
     </form>
     {% endfor %}

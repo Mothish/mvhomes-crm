@@ -446,7 +446,7 @@
     if (!el || !src || !window.L) return null;
     var data = JSON.parse(src.textContent), map = baseMap(el), points = [];
     (data.pins || []).forEach(function (p) {
-      L.circleMarker([p.lat, p.lng], {radius: 9, color: '#fff', weight: 2, fillColor: p.color || '#1f3a68', fillOpacity: 1})
+      p.layer = L.circleMarker([p.lat, p.lng], {radius: 9, color: '#fff', weight: 2, fillColor: p.color || '#1f3a68', fillOpacity: 1})
         .bindPopup(pinPopup(p)).bindTooltip(textEl('span', p.title)).addTo(map);
       points.push([p.lat, p.lng]);
     });
@@ -459,14 +459,74 @@
       return L.circle([d.lat, d.lng], {radius: 700 + d.count * 400, color: '#ef4444', weight: 1, fillColor: '#ef4444', fillOpacity: 0.18})
         .bindTooltip(textEl('span', d.label + ': ' + d.count + ' open lead' + (d.count === 1 ? '' : 's')));
     }));
-    if (points.length > 1) map.fitBounds(points, {padding: [30, 30], maxZoom: 14});
+    if (points.length > 1) map.fitBounds(points, {padding: [40, 40], maxZoom: 14});
     else map.setView(points[0] || DOHA, points.length ? 14 : 10);
-    return {map: map, demand: demand};
+    return {map: map, demand: demand, data: data};
+  }
+
+  // OpenStreetMap place search (free). Its usage policy needs a referrer, which the site's
+  // same-origin Referrer-Policy would otherwise strip, and at most ~1 request/second (we only search on demand).
+  function osm(path, params) {
+    var query = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    return fetch('https://nominatim.openstreetmap.org/' + path + '?format=jsonv2&accept-language=en&' + query,
+                 {referrerPolicy: 'strict-origin-when-cross-origin'})
+      .then(function (r) { if (!r.ok) throw new Error('search failed'); return r.json(); });
+  }
+
+  // Search box on the projects map: our projects/areas first, then any place via OpenStreetMap.
+  function addMapSearch(map, data) {
+    var Search = L.Control.extend({
+      onAdd: function () {
+        var box = textEl('div', '', 'map-search'), input = document.createElement('input'), list = textEl('ul', '', 'loc-results');
+        input.type = 'search';
+        input.className = 'input';
+        input.placeholder = 'Search project or area…';
+        input.setAttribute('aria-label', 'Search the map');
+        list.hidden = true;
+        box.appendChild(input);
+        box.appendChild(list);
+        L.DomEvent.disableClickPropagation(box);
+        L.DomEvent.disableScrollPropagation(box);
+        var found = null;
+        function note(text) { list.textContent = ''; list.appendChild(textEl('li', text, 'muted')); list.hidden = false; }
+        function go() {
+          var raw = input.value.trim(), q = raw.toLowerCase();
+          list.hidden = true;
+          if (!q) return;
+          var hits = (data.pins || []).filter(function (p) { return (p.title + ' ' + (p.lines || []).join(' ')).toLowerCase().indexOf(q) !== -1; });
+          if (hits.length) {
+            if (hits.length === 1) map.setView([hits[0].lat, hits[0].lng], 15);
+            else map.fitBounds(hits.map(function (h) { return [h.lat, h.lng]; }), {padding: [50, 50], maxZoom: 15});
+            hits[0].layer.openPopup();
+            if (hits.length > 1) note(hits.length + ' projects match "' + raw + '"');
+            return;
+          }
+          var city = (data.demand || []).filter(function (d) { return d.label.toLowerCase() === q; })[0];
+          if (city) { map.setView([city.lat, city.lng], 12); return; }
+          var b = map.getBounds();
+          osm('search', {q: raw, limit: 1, viewbox: [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()].join(',')})
+            .then(function (res) {
+              if (!res.length) { note('No project or place found for "' + raw + '"'); return; }
+              var a = +res[0].lat, o = +res[0].lon;
+              if (found) found.remove();
+              found = L.marker([a, o]).bindTooltip(textEl('span', res[0].display_name.split(',')[0]), {permanent: true}).addTo(map);
+              map.setView([a, o], 14);
+            })
+            .catch(function () { note('Place search is unavailable right now.'); });
+        }
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+        input.addEventListener('search', go);
+        return box;
+      }
+    });
+    new Search({position: 'topright'}).addTo(map);
   }
 
   function initProjectsMap(elId, dataId, toggleId) {
     var result = pinsMap(elId, dataId), toggle = document.getElementById(toggleId);
-    if (!result || !toggle) return;
+    if (!result) return;
+    addMapSearch(result.map, result.data);
+    if (!toggle) return;
     function sync() { if (toggle.checked) result.demand.addTo(result.map); else result.demand.remove(); }
     toggle.addEventListener('change', sync);
     sync();
@@ -474,41 +534,124 @@
 
   function coordsFromLink(text) {
     var patterns = [/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/, /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/,
-                    /[?&](?:q|query|ll|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/];
+                    /[?&](?:q|query|ll|destination|center)=(-?\d{1,2}\.\d+),\s*\+?(-?\d{1,3}\.\d+)/];
+    var decoded = text || '';
+    try { decoded = decodeURIComponent(decoded); } catch (e) { /* keep as typed */ }
     for (var i = 0; i < patterns.length; i++) {
-      var m = patterns[i].exec(text || '');
+      var m = patterns[i].exec(decoded);
       if (m) return [parseFloat(m[1]), parseFloat(m[2])];
     }
     return null;
   }
 
-  // Project form: click the map, drag the pin, type coordinates or paste a Google Maps link.
+  function looksLikeLink(text) { return /^https?:\/\//i.test(text) || /goo\.gl\/|google\.[a-z.]+\/maps/i.test(text); }
+
+  // Project form: paste any Google Maps link, search a place name, use the device location or tap the map.
+  // Coordinates stay hidden; city and area are filled from the pin when they are empty.
   function initLocationPicker(elId) {
     var el = document.getElementById(elId), lat = document.getElementById('id_latitude'),
-        lng = document.getElementById('id_longitude'), link = document.getElementById('id_maps_link');
-    if (!el || !lat || !lng || !window.L) return;
+        lng = document.getElementById('id_longitude'), box = document.getElementById('loc-picker');
+    if (!el || !lat || !lng || !box || !window.L) return;
+    var input = document.getElementById('loc-input'), results = document.getElementById('loc-results'),
+        status = document.getElementById('loc-status'), me = document.getElementById('loc-me'),
+        country = document.getElementById('id_country'), city = document.getElementById('id_city'),
+        area = document.getElementById('id_area');
     var map = baseMap(el), marker = null;
-    function write(a, b) { lat.value = a.toFixed(6); lng.value = b.toFixed(6); }
-    function place(a, b, pan) {
-      if (marker) marker.setLatLng([a, b]);
-      else {
-        marker = L.marker([a, b], {draggable: true}).addTo(map);
-        marker.on('dragend', function () { var p = marker.getLatLng(); write(p.lat, p.lng); });
+
+    function say(text, isError) {
+      status.textContent = text;
+      status.classList.toggle('text-red', !!isError);
+    }
+    function placeMarker(a, b) {
+      if (marker) { marker.setLatLng([a, b]); return; }
+      marker = L.marker([a, b], {draggable: true}).addTo(map);
+      marker.on('dragend', function () { var p = marker.getLatLng(); setPin(p.lat, p.lng, true); });
+    }
+    function setPin(a, b, keepView) {
+      lat.value = a.toFixed(6);
+      lng.value = b.toFixed(6);
+      placeMarker(a, b);
+      if (!keepView) map.setView([a, b], Math.max(map.getZoom() || 0, 16));
+      say('📍 Location set. Drag the pin to fine-tune.');
+      fillAddress(a, b);
+    }
+    function fillAddress(a, b) {
+      if (!city || !area || (city.value.trim() && area.value.trim())) return;
+      osm('reverse', {lat: a, lon: b, zoom: 16, addressdetails: 1}).then(function (r) {
+        var ad = r.address || {}, iso = (ad.country_code || '').toUpperCase(), filled = [];
+        if (country && iso && country.value !== iso &&
+            Array.prototype.some.call(country.options, function (o) { return o.value === iso; })) {
+          country.value = iso;
+          country.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+        var cityName = ad.city || ad.town || ad.village || ad.municipality || '';
+        var areaName = ad.suburb || ad.neighbourhood || ad.quarter || ad.city_district || '';
+        if (cityName && !city.value.trim()) {
+          setValue(city, cityName);
+          city.dispatchEvent(new Event('input', {bubbles: true}));
+          var combo = city.closest('.combo');
+          if (combo) combo.classList.remove('open');
+          filled.push('city “' + cityName + '”');
+        }
+        if (areaName && !area.value.trim() && !area.disabled) {
+          setValue(area, areaName);
+          filled.push('area “' + areaName + '”');
+        }
+        if (filled.length) say('📍 Location set. Filled ' + filled.join(' and ') + ' (you can edit them).');
+      }).catch(function () { /* city/area simply stay as typed */ });
+    }
+    function showChoices(list) {
+      results.textContent = '';
+      list.forEach(function (r) {
+        var li = textEl('li', r.display_name);
+        li.tabIndex = 0;
+        function pick() { results.hidden = true; setPin(+r.lat, +r.lon); }
+        li.addEventListener('click', pick);
+        li.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); pick(); } });
+        results.appendChild(li);
+      });
+      results.hidden = false;
+      say('Pick the right place:');
+    }
+    function find() {
+      var text = input.value.trim();
+      results.hidden = true;
+      if (!text) { say('Paste a Google Maps link or type a place name first.', true); return; }
+      if (looksLikeLink(text)) {
+        var c = coordsFromLink(text);
+        if (c) { setPin(c[0], c[1]); return; }
+        say('Reading the link…');
+        fetch(box.dataset.resolveUrl + '?url=' + encodeURIComponent(text), {headers: {'X-Requested-With': 'fetch'}})
+          .then(function (r) { return r.json(); })
+          .then(function (d) { if (d.ok) setPin(d.lat, d.lng); else say(d.error, true); })
+          .catch(function () { say('Could not read the link. Search the place name instead.', true); });
+        return;
       }
-      if (pan) map.setView([a, b], Math.max(map.getZoom() || 0, 15));
+      say('Searching…');
+      var params = {q: text, limit: 5};
+      if (country && country.value) params.countrycodes = country.value.toLowerCase();
+      osm('search', params).then(function (list) {
+        if (!list.length) say('No place found for “' + text + '”. Try a nearby landmark, or paste a Google Maps link.', true);
+        else if (list.length === 1) setPin(+list[0].lat, +list[0].lon);
+        else showChoices(list);
+      }).catch(function () { say('Place search is unavailable right now. Tap the map or paste a Google Maps link.', true); });
     }
-    function fromInputs() {
-      var a = parseFloat(lat.value), b = parseFloat(lng.value);
-      if (!isNaN(a) && !isNaN(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180) { place(a, b, true); return true; }
-      return false;
-    }
-    if (!fromInputs()) map.setView(DOHA, 10);
-    map.on('click', function (e) { write(e.latlng.lat, e.latlng.lng); place(e.latlng.lat, e.latlng.lng); });
-    lat.addEventListener('change', fromInputs);
-    lng.addEventListener('change', fromInputs);
-    if (link) link.addEventListener('input', function () {
-      var c = coordsFromLink(link.value);
-      if (c) { write(c[0], c[1]); place(c[0], c[1], true); }
+
+    var a = parseFloat(lat.value), b = parseFloat(lng.value);
+    if (!isNaN(a) && !isNaN(b)) { placeMarker(a, b); map.setView([a, b], 15); say('📍 Location set. Drag the pin, or search again to move it.'); }
+    else map.setView(DOHA, 10);
+
+    document.getElementById('loc-find').addEventListener('click', find);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+    input.addEventListener('paste', function () { setTimeout(function () { if (looksLikeLink(input.value)) find(); }, 0); });
+    map.on('click', function (e) { setPin(e.latlng.lat, e.latlng.lng, true); });
+    if (!navigator.geolocation) me.hidden = true;
+    else me.addEventListener('click', function () {
+      say('Getting your location…');
+      navigator.geolocation.getCurrentPosition(
+        function (p) { setPin(p.coords.latitude, p.coords.longitude); },
+        function () { say('Location is blocked or unavailable on this device.', true); },
+        {enableHighAccuracy: true, timeout: 10000});
     });
   }
 
