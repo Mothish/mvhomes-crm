@@ -1,13 +1,19 @@
 {% extends "base.html" %}{% load crm_tags %}
 {% block title %}Projects{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Projects</h1><p>Ongoing projects shown in lead forms, the website enquiry form and reports.</p></div>
-  <a class="btn btn-primary" href="{% url 'project_create' %}">+ Add project</a></div>
+<div class="page-head"><div><h1>Projects</h1><p>Ongoing projects shown in lead forms, suggestions, the website enquiry form and reports.</p></div>
+  <div class="head-actions"><a class="btn btn-secondary" href="{% url 'projects_map' %}">🗺 Map</a><a class="btn btn-primary" href="{% url 'project_create' %}">+ Add project</a></div></div>
 <div class="grid-2">
   {% for p in items %}
   <a class="card card-body" href="{% url 'project_edit' p.pk %}" style="color:inherit;text-decoration:none{% if not p.is_active %};opacity:.55{% endif %}">
     <div style="display:flex;justify-content:space-between;gap:8px"><h3 style="margin:0">{{ p.name }}</h3>{% if p.is_active %}<span class="badge b-green">Selling</span>{% else %}<span class="badge b-gray">Inactive</span>{% endif %}</div>
-    <p class="muted" style="margin:4px 0 12px">📍 {{ p.location }} · {{ p.property_types }} · {{ p.price_from|money_short }} – {{ p.price_to|money_short }}</p>
+    <p class="muted" style="margin:4px 0 6px">📍 {{ p.place }} · {{ p.price_from|money_short }} – {{ p.price_to|money_short }}</p>
+    <p style="margin:0 0 12px;display:flex;gap:6px;flex-wrap:wrap">
+      <span class="badge b-blue">{{ p.get_status_display }}{% if p.handover %} · {{ p.handover }}{% endif %}</span>
+      {% for t in p.unit_type_labels %}<span class="badge b-gray">{{ t }}</span>{% empty %}<span class="badge b-amber">No unit types set</span>{% endfor %}
+      {% if not p.has_coordinates %}<span class="badge b-amber">No map pin</span>{% endif %}
+      <span class="badge {% if p.doc_count %}b-green{% else %}b-amber{% endif %}">{{ p.doc_count }} document{{ p.doc_count|pluralize }}</span>
+    </p>
     <div style="display:flex;gap:18px"><div><div class="kpi-label">Leads</div><strong style="font-size:20px">{{ p.lead_count }}</strong></div>
       <div><div class="kpi-label">Bookings</div><strong style="font-size:20px">{{ p.booking_count }}</strong></div>
       <div><div class="kpi-label">Conversion</div><strong style="font-size:20px">{{ p.booking_count|pct:p.lead_count }}%</strong></div></div>

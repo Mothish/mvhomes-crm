@@ -3,16 +3,44 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
+from crm.locale_data import format_money
+from crm.matching import suggest_projects
 from crm.models import (
-    Activity, AdSpend, Assignment, AuditLog, Booking, Lead, Notification, Profile, Project, SiteVisit, Target, Team,
-    month_start,
+    Activity, AdSpend, Assignment, AuditLog, Booking, Lead, LinkOpen, Notification, Profile, Project,
+    ProjectDocument, ShareLink, SiteVisit, Target, Team, month_start,
 )
 
 PASSWORD = "Demo@1234"
+
+
+def demo_pdf(title, lines):
+    """A small valid one-page PDF, so the demo has real documents without extra libraries."""
+    def esc(text):
+        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    ops = [f"BT /F1 20 Tf 60 770 Td ({esc(title)}) Tj ET"]
+    ops += [f"BT /F1 12 Tf 60 {730 - 22 * n} Td ({esc(line)}) Tj ET" for n, line in enumerate(lines)]
+    stream = "\n".join(ops).encode("latin-1", "replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+    ]
+    out, offsets = b"%PDF-1.4\n", []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return out
 STAFF = [  # username, first, last, role, team, first-response minutes
     ("karthik", "Karthik", "Raman", Profile.ADMIN, None, None),
     ("meera", "Meera", "Krishnan", Profile.MANAGER, None, None),
@@ -23,11 +51,16 @@ STAFF = [  # username, first, last, role, team, first-response minutes
     ("sanjay", "Sanjay", "Reddy", Profile.EXECUTIVE, "Team West Bay", 18),
     ("kavitha", "Kavitha", "Rajan", Profile.EXECUTIVE, "Team West Bay", 55),
 ]
-PROJECTS = [  # name, location, types, price from/to (QAR), team
-    ("MV Marina Residences", "Marina District, Lusail", "1-3 BR apartments", 1_150_000, 3_200_000, "Team Lusail"),
-    ("MV Pearl Towers", "Porto Arabia, The Pearl-Qatar", "1-3 BR & penthouses", 1_450_000, 5_800_000, "Team West Bay"),
-    ("MV West Bay Heights", "West Bay, Doha", "Studio - 2 BR apartments", 780_000, 2_100_000, "Team West Bay"),
-    ("MV Wakrah Villas", "Al Wukair, Al Wakrah", "4-5 BR villas & townhouses", 2_400_000, 4_900_000, "Team Lusail"),
+PROJECTS = [  # name, address, types text, price from/to (QAR), team, city, area, lat, lng, unit types, status, handover
+    ("MV Marina Residences", "Marina District, Lusail", "1-3 BR apartments", 1_150_000, 3_200_000, "Team Lusail",
+     "Lusail", "Marina District", "25.413000", "51.509000", "1br,2br,3br", Project.READY, ""),
+    ("MV Pearl Towers", "Porto Arabia, The Pearl-Qatar", "1-3 BR & penthouses", 1_450_000, 5_800_000, "Team West Bay",
+     "Doha", "The Pearl-Qatar", "25.368700", "51.551000", "1br,2br,3br,penthouse", Project.UNDER_CONSTRUCTION,
+     "Q2 2027"),
+    ("MV West Bay Heights", "West Bay, Doha", "Studio - 2 BR apartments", 780_000, 2_100_000, "Team West Bay",
+     "Doha", "West Bay", "25.323500", "51.529000", "studio,1br,2br", Project.READY, ""),
+    ("MV Wakrah Villas", "Al Wukair, Al Wakrah", "4-5 BR villas & townhouses", 2_400_000, 4_900_000, "Team Lusail",
+     "Al Wakrah", "Al Wukair", "25.148000", "51.539000", "4br,villa,townhouse", Project.OFF_PLAN, "Q4 2027"),
 ]
 # name, dial, number, country, city, area, source, project#, type, budget QAR, stage, temp, lang, days ago, owner, lost reason
 LEADS = [
@@ -73,6 +106,8 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         if options["reset"]:
+            for doc in ProjectDocument.objects.all():
+                doc.file.delete(save=False)
             for model in (Notification, AuditLog, Booking, SiteVisit, Activity, Assignment, Lead, Target, AdSpend):
                 model.objects.all().delete()
             Project.objects.all().delete()
@@ -85,8 +120,10 @@ class Command(BaseCommand):
         self.now = timezone.now()
         users = self._users()
         projects = self._projects(users)
+        self._documents(projects, users["karthik"])
         for i, row in enumerate(LEADS):
             self._lead(i, row, users, projects)
+        self._shares()
         self._spend_and_targets(users)
         self.stdout.write(self.style.SUCCESS(
             f"Loaded {len(users)} users, {len(projects)} projects, {Lead.objects.count()} leads, "
@@ -116,16 +153,69 @@ class Command(BaseCommand):
 
     def _projects(self, users):
         out = []
-        for name, location, types, pfrom, pto, team in PROJECTS:
+        for name, location, types, pfrom, pto, team, city, area, lat, lng, units, status, handover in PROJECTS:
             project, _ = Project.objects.update_or_create(name=name, defaults={
                 "location": location, "property_types": types, "price_from": pfrom, "price_to": pto,
                 "brochure_url": f"https://{settings.COMPANY_WEBSITE}/{name.split()[1].lower()}.pdf", "is_active": True,
+                "country": "QA", "city": city, "area": area, "latitude": Decimal(lat), "longitude": Decimal(lng),
+                "unit_types": units, "status": status, "handover": handover,
             })
             for username, *_r, member_team, _s in STAFF:
                 if member_team == team and username in users:
                     users[username].profile.projects.add(project)
             out.append(project)
         return out
+
+    def _documents(self, projects, admin):
+        for d in ProjectDocument.objects.filter(project__in=projects):
+            d.file.delete(save=False)
+        ProjectDocument.objects.filter(project__in=projects).delete()
+        for i, project in enumerate(projects):
+            price = f"From {format_money(project.price_from, 'QAR')} to {format_money(project.price_to, 'QAR')}"
+            docs = [("brochure", "Brochure", 1, True, [project.location, project.property_types,
+                                                       project.get_status_display(), "Demo brochure"]),
+                    ("price_list", "Price list", 1, i != 1, [price, "Valid this month", "Demo price list"])]
+            if i == 1:  # Pearl Towers: v1 price list replaced by v2 to demo versioning
+                docs.append(("price_list", "Price list", 2, True, [price, "Revised prices", "Demo price list v2"]))
+            for kind, label, version, active, lines in docs:
+                doc = ProjectDocument(project=project, kind=kind, title=label, version=version, is_active=active,
+                                      uploaded_by=admin)
+                doc.file.save(f"{kind}.pdf", ContentFile(demo_pdf(f"{project.name} - {label} v{version}", lines)),
+                              save=False)
+                doc.save()
+
+    def _shares(self):
+        leads = list(Lead.objects.filter(stage__in=Lead.OPEN_STAGES).exclude(owner=None).order_by("created_at"))
+        for i, lead in enumerate(leads[:10]):
+            suggestions = suggest_projects(lead, limit=None)
+            if not suggestions:
+                continue
+            off = i == 3
+            if off:
+                suggested = {s["project"].pk for s in suggestions}
+                project = Project.objects.exclude(pk__in=suggested).first() or suggestions[0]["project"]
+                off = project.pk not in suggested
+            else:
+                project = suggestions[0]["project"]
+            sent = max(lead.created_at + timedelta(hours=3), self.now - timedelta(days=6 - i % 6, hours=i))
+            link = ShareLink.objects.create(
+                lead=lead, project=project, sent_by=lead.owner, created_at=sent, off_suggestion=off,
+                reason="Client asked to also see villas in Al Wakrah" if off else "")
+            link.documents.set(project.documents.filter(is_active=True))
+            Activity.objects.create(lead=lead, kind="whatsapp", created_by=lead.owner, created_at=sent,
+                                    note=f"Shared {project.name} via tracked link"
+                                         + (f". Outside suggestions: {link.reason}" if off else ""))
+            opens = [0, 2, 1, 3, 0, 1, 2, 0, 1, 4][i]
+            for n in range(opens):
+                LinkOpen.objects.create(link=link, opened_at=sent + timedelta(minutes=20 + 90 * n),
+                                        device=["iPhone", "Android", "Windows"][n % 3])
+            if opens:
+                link.open_count, link.first_opened_at = opens, sent + timedelta(minutes=20)
+                link.last_opened_at = sent + timedelta(minutes=20 + 90 * (opens - 1))
+                if i in (1, 9):
+                    link.interest = "visit" if i == 1 else "interested"
+                    link.interest_at = link.last_opened_at + timedelta(minutes=5)
+                link.save()
 
     def _act(self, lead, kind, at, by, note="", outcome=""):
         if at <= self.now:

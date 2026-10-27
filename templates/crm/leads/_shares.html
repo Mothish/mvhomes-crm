@@ -1,0 +1,27 @@
+{% load crm_tags %}
+<section class="card" id="shares">
+  <div class="card-header"><h2>Shared with client</h2><span class="muted small">{{ shares|length }} link{{ shares|length|pluralize }}</span></div>
+  {% if shares %}
+  <div class="card-body stack" style="gap:10px">
+    {% for sh in shares %}
+    <div class="share-item{% if sh.is_revoked %} revoked{% endif %}">
+      <div class="sg-head"><strong>{{ sh.project.name }}</strong>
+        {% if sh.is_revoked %}<span class="badge b-gray">Disabled</span>{% elif sh.open_count %}<span class="badge b-green">👁 Opened {{ sh.open_count }}×</span>{% else %}<span class="badge b-amber">Not opened yet</span>{% endif %}
+        {% if sh.interest %}<span class="badge b-red">🔥 {{ sh.get_interest_display }}</span>{% endif %}
+      </div>
+      <div class="small">{% for d in sh.documents.all %}{{ d.title }} v{{ d.version }}{% if not forloop.last %}, {% endif %}{% empty %}Project page only{% endfor %}</div>
+      <div class="small muted">by {{ sh.sent_by|person:"—" }} · {{ sh.created_at|date:"d M, h:i A" }}{% if sh.last_opened_at %} · last opened {{ sh.last_opened_at|date:"d M, h:i A" }}{% endif %}</div>
+      {% if sh.off_suggestion %}<div class="small text-amber">⚠ Outside suggestions: {{ sh.reason }}</div>{% endif %}
+      {% if not sh.is_revoked %}
+      <div class="share-actions">
+        <button class="btn btn-secondary btn-sm" type="button" data-copy="{{ request.scheme }}://{{ request.get_host }}{% url 'share_page' sh.token %}">Copy link</button>
+        {% if can_reassign or sh.sent_by_id == user.pk %}
+        <form method="post" action="{% url 'share_revoke' sh.pk %}" onsubmit="return confirm('Disable this link? The client will see that it is no longer valid.')">{% csrf_token %}<button class="btn btn-secondary btn-sm" type="submit">Disable link</button></form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty">Nothing shared yet. Use the suggestions to send a tracked link.</div>{% endif %}
+</section>

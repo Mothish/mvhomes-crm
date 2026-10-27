@@ -47,6 +47,11 @@ def person(user, fallback="Unassigned"):
 
 
 @register.filter
+def first_word(text):
+    return (text or "").split(" ")[0]
+
+
+@register.filter
 def initials(user):
     if not user:
         return "?"

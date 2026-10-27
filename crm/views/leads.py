@@ -159,6 +159,8 @@ def lead_check_phone(request):
 
 @role_required(*SALES_ROLES)
 def lead_detail(request, pk):
+    from .sharing import lead_share_context
+
     lead = get_visible_lead(request, pk)
     initial = {"temperature": lead.temperature, "kind": "call"}
     if lead.next_followup and lead.next_followup > timezone.now():
@@ -177,6 +179,7 @@ def lead_detail(request, pk):
             "previews": lead_previews(lead),
             "stage_list": [(k, v, Lead.STAGE_RANK[k]) for k, v in Lead.STAGES if k != Lead.LOST],
             "booking": getattr(lead, "booking", None) if lead.stage == Lead.BOOKED else None,
+            **lead_share_context(lead),
         },
     )
 

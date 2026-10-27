@@ -25,6 +25,8 @@ def post_only(view):
             if pk and Lead.objects.filter(pk=pk).exists():
                 return redirect("lead_detail", pk=pk)
             return redirect("lead_list")
+        if kwargs.get("token"):
+            return redirect("share_page", token=kwargs["token"])
         return redirect("home")
     return wrapper
 

@@ -1,4 +1,6 @@
 from datetime import time
+from decimal import ROUND_HALF_UP, Decimal
+import re
 
 from django import forms
 from django.conf import settings
@@ -12,7 +14,9 @@ from .locale_data import (
     BASE_CURRENCY, CURRENCY_CHOICES, DEFAULT_COUNTRY, DEFAULT_DIAL, DIAL_CHOICES, currency_for, current_currency,
     from_base, to_base,
 )
-from .models import Activity, Booking, Lead, Profile, Project, SiteVisit, Team, normalize_phone, phone_validator
+from .models import (
+    Activity, Booking, Lead, Profile, Project, ProjectDocument, SiteVisit, Team, normalize_phone, phone_validator,
+)
 
 
 class DateInput(forms.DateInput):
@@ -330,17 +334,130 @@ class ImportForm(StyledMixin, forms.Form):
         return upload
 
 
+MAPS_COORD_PATTERNS = [
+    r"@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)",
+    r"!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)",
+    r"[?&](?:q|query|ll|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)",
+]
+
+
+def coords_from_maps_link(link):
+    """(lat, lng) from a full Google Maps URL, or None. The URL is only parsed, never fetched."""
+    for pattern in MAPS_COORD_PATTERNS:
+        match = re.search(pattern, link or "")
+        if match:
+            lat, lng = (Decimal(v).quantize(Decimal("0.000001"), ROUND_HALF_UP) for v in match.groups())
+            if -90 <= lat <= 90 and -180 <= lng <= 180:
+                return lat, lng
+    return None
+
+
 class ProjectForm(MoneyFormMixin, StyledMixin, forms.ModelForm):
     money_fields = ("price_from", "price_to")
+    unit_types = forms.MultipleChoiceField(
+        choices=[(k, v) for k, v in Lead.PROPERTY_TYPES if k != "other"], widget=forms.CheckboxSelectMultiple,
+        required=False, label="Unit types available (used to suggest this project to matching leads)",
+    )
+    maps_link = forms.CharField(
+        required=False, label="Google Maps link",
+        help_text="Paste the full link from Google Maps to place the pin, or click on the map below.",
+        widget=forms.TextInput(attrs={"placeholder": "https://www.google.com/maps/place/...@25.41,51.50,..."}),
+    )
+    field_order = ["name", "status", "handover", "country", "city", "area", "location", "maps_link",
+                   "latitude", "longitude", "unit_types", "property_types"]
 
     class Meta:
         model = Project
-        fields = ["name", "location", "property_types", "price_from", "price_to", "brochure_url", "is_active"]
+        fields = ["name", "status", "handover", "country", "city", "area", "location", "latitude", "longitude",
+                  "property_types", "price_from", "price_to", "cover_image_url", "brochure_url", "is_active"]
+        widgets = {
+            "city": forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Select or type a city"}),
+            "area": forms.TextInput(attrs={"autocomplete": "off", "placeholder": "Select or type an area"}),
+            "latitude": forms.NumberInput(attrs={"step": "any", "placeholder": "e.g. 25.413000"}),
+            "longitude": forms.NumberInput(attrs={"step": "any", "placeholder": "e.g. 51.509000"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.initial.setdefault("unit_types", self.instance.unit_type_list)
+
+    def initial_currency(self):
+        return currency_for(self.instance.country or DEFAULT_COUNTRY)
 
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("price_from") and cleaned.get("price_to") and cleaned["price_from"] > cleaned["price_to"]:
             self.add_error("price_to", "'Price to' must be higher than 'Price from'.")
+        link = (cleaned.get("maps_link") or "").strip()
+        if link:
+            coords = coords_from_maps_link(link)
+            if coords:
+                cleaned["latitude"], cleaned["longitude"] = coords
+            else:
+                self.add_error("maps_link", "No location found in this link. Open it in Google Maps and copy the full "
+                                            "address-bar URL (short maps.app.goo.gl links can't be read).")
+        if (cleaned.get("latitude") is None) != (cleaned.get("longitude") is None):
+            self.add_error("longitude", "Enter both latitude and longitude, or neither.")
+        return cleaned
+
+    def save(self, commit=True):
+        project = super().save(commit=False)
+        project.unit_types = ",".join(self.cleaned_data.get("unit_types") or [])
+        if commit:
+            project.save()
+        return project
+
+
+FILE_SIGNATURES = {"pdf": (b"%PDF",), "jpg": (b"\xff\xd8\xff",), "jpeg": (b"\xff\xd8\xff",),
+                   "png": (b"\x89PNG\r\n\x1a\n",)}
+
+
+class ProjectDocumentForm(StyledMixin, forms.ModelForm):
+    replaces = forms.BooleanField(required=False, initial=True,
+                                  label="Replace the current document of this type (old shared links show the new one)")
+
+    class Meta:
+        model = ProjectDocument
+        fields = ["kind", "title", "file", "url"]
+        help_texts = {"file": "PDF, JPG or PNG.", "url": "Or link to a file hosted elsewhere (https)."}
+
+    def clean_file(self):
+        upload = self.cleaned_data.get("file")
+        if not upload:
+            return upload
+        if upload.size > settings.DOCUMENT_MAX_MB * 1024 * 1024:
+            raise forms.ValidationError(f"File is larger than {settings.DOCUMENT_MAX_MB} MB.")
+        ext = upload.name.rsplit(".", 1)[-1].lower()
+        head = upload.read(8)
+        upload.seek(0)
+        if not head.startswith(FILE_SIGNATURES.get(ext, (b"\0invalid",))):
+            raise forms.ValidationError("The file content doesn't match its type. Upload a real PDF, JPG or PNG.")
+        return upload
+
+    def clean_url(self):
+        url = self.cleaned_data.get("url", "")
+        if url and not url.lower().startswith(("https://", "http://")):
+            raise forms.ValidationError("Use an http(s) link.")
+        return url
+
+    def clean(self):
+        cleaned = super().clean()
+        if bool(cleaned.get("file")) == bool(cleaned.get("url")):
+            raise forms.ValidationError("Upload a file or give a link (one of the two).")
+        return cleaned
+
+
+class ShareForm(forms.Form):
+    project = forms.ModelChoiceField(queryset=Project.objects.filter(is_active=True))
+    documents = forms.ModelMultipleChoiceField(queryset=ProjectDocument.objects.filter(is_active=True), required=False)
+    reason = forms.CharField(max_length=200, required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        project, docs = cleaned.get("project"), cleaned.get("documents") or []
+        if project and any(d.project_id != project.pk for d in docs):
+            raise forms.ValidationError("Pick documents of the selected project only.")
         return cleaned
 
 

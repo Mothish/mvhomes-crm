@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Shared links{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Shared links</h1><p>Every project and document sent to clients: who sent it, whether the client opened it, and any share outside the client's requirement.</p></div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">Links shared</div><div class="kpi-value">{{ stats.total }}</div></div>
+  <div class="kpi"><div class="kpi-label">Opened by client</div><div class="kpi-value">{{ stats.opened }}</div><div class="kpi-sub">{{ stats.opened|pct:stats.total }}%</div></div>
+  <div class="kpi"><div class="kpi-label">Client interested</div><div class="kpi-value">{{ stats.interested }}</div></div>
+  <div class="kpi"><div class="kpi-label">Outside suggestions</div><div class="kpi-value{% if stats.flagged %} text-amber{% endif %}">{{ stats.flagged }}</div></div>
+</div>
+<div class="seg" style="margin:14px 0">
+  <a class="{% if not show %}active{% endif %}" href="?">All</a>
+  <a class="{% if show == 'flagged' %}active{% endif %}" href="?show=flagged">⚠ Outside suggestions</a>
+  <a class="{% if show == 'unopened' %}active{% endif %}" href="?show=unopened">Not opened</a>
+  <a class="{% if show == 'interested' %}active{% endif %}" href="?show=interested">🔥 Interested</a>
+</div>
+<div class="card"><div class="table-wrap"><table class="table">
+  <thead><tr><th>Shared</th><th>By</th><th>Client</th><th>Project &amp; documents</th><th>Opened</th><th>Client response</th></tr></thead>
+  <tbody>
+  {% for sh in links %}
+  <tr{% if sh.is_revoked %} class="muted"{% endif %}>
+    <td class="small">{{ sh.created_at|date:"d M, h:i A" }}</td>
+    <td>{{ sh.sent_by|person:"—" }}</td>
+    <td><a href="{% url 'lead_detail' sh.lead_id %}">{{ sh.lead.name }}</a></td>
+    <td><strong>{{ sh.project.name }}</strong>
+      <div class="small muted">{% for d in sh.documents.all %}{{ d.title }} v{{ d.version }}{% if not forloop.last %}, {% endif %}{% empty %}Project page only{% endfor %}</div>
+      {% if sh.off_suggestion %}<div class="small text-amber">⚠ {{ sh.reason }}</div>{% endif %}
+      {% if sh.is_revoked %}<span class="badge b-gray">Disabled</span>{% endif %}</td>
+    <td>{% if sh.open_count %}<span class="badge b-green">{{ sh.open_count }}×</span><div class="small muted">{{ sh.last_opened_at|date:"d M, h:i A" }}</div>{% else %}<span class="badge b-amber">Not yet</span>{% endif %}</td>
+    <td>{% if sh.interest %}<span class="badge b-red">🔥 {{ sh.get_interest_display }}</span>{% else %}—{% endif %}</td>
+  </tr>
+  {% empty %}<tr><td colspan="6" class="empty">No shared links{% if show %} for this filter{% endif %}.</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

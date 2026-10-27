@@ -1,0 +1,34 @@
+{% load crm_tags %}
+<section class="card" id="suggestions">
+  <div class="card-header"><h2>Suggested properties</h2><span class="muted small">Matched on location, budget and property type. Sharing sends a tracked link from your WhatsApp.</span></div>
+  {% if suggest_map %}<div id="suggest-map" class="map map-sm"></div>{{ suggest_map|json_script:"suggest-map-data" }}{% endif %}
+  {% if suggestions %}
+  <div class="card-body stack" style="gap:12px">
+    {% for s in suggestions %}
+    <form class="suggestion tier-{{ s.tier }}" method="post" action="{% url 'lead_share' lead.pk %}" target="_blank" data-share>{% csrf_token %}
+      <input type="hidden" name="project" value="{{ s.project.pk }}">
+      <div class="sg-head"><strong>{{ s.project.name }}</strong><span class="badge sg-tier">{{ s.tier_label }}</span></div>
+      <div class="small muted">{{ s.project.place }} · {{ s.project.price_from|money_short }} – {{ s.project.price_to|money_short }} · {{ s.project.get_status_display }}{% if s.project.handover %} ({{ s.project.handover }}){% endif %}</div>
+      <div class="sg-chips">{% for r in s.reasons %}<span class="badge b-green">✓ {{ r }}</span>{% endfor %}{% for w in s.warnings %}<span class="badge b-amber">! {{ w }}</span>{% endfor %}</div>
+      {% if s.docs %}<div class="sg-docs">{% for d in s.docs %}<label class="check small"><input type="checkbox" name="documents" value="{{ d.pk }}" checked> {{ d.title }}</label>{% endfor %}</div>
+      {% else %}<div class="small muted">No documents uploaded yet, so the client gets the project page only.</div>{% endif %}
+      <div><button class="btn btn-wa btn-sm" type="submit">Share on WhatsApp</button></div>
+    </form>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty">No active project matches this client's location, budget and property type. You can still share one below with a reason.</div>{% endif %}
+  <details class="card-body share-other">
+    <summary>Share a different project</summary>
+    <form id="share-other" method="post" action="{% url 'lead_share' lead.pk %}" target="_blank" data-share>{% csrf_token %}
+      <div class="field"><label for="so-project">Project <span class="req">*</span></label>
+        <select class="input" name="project" id="so-project" required><option value="">Select project</option>
+          {% for sp in share_projects %}<option value="{{ sp.project.pk }}" data-suggested="{% if sp.suggested %}1{% else %}0{% endif %}">{{ sp.project.name }}{% if not sp.suggested %} (doesn't match requirement){% endif %}</option>{% endfor %}
+        </select></div>
+      <div class="sg-docs">{% for sp in share_projects %}{% for d in sp.docs %}<label class="check small" data-doc-project="{{ sp.project.pk }}" hidden><input type="checkbox" name="documents" value="{{ d.pk }}" checked disabled> {{ d.title }}</label>{% endfor %}{% endfor %}</div>
+      <div class="field share-reason" hidden><label for="so-reason">Why this project? <span class="req">*</span></label>
+        <input class="input" name="reason" id="so-reason" maxlength="200" placeholder="e.g. Client now prefers a villa in Al Wakrah">
+        <small class="help">This project is outside the client's requirement, so your manager is notified.</small></div>
+      <div><button class="btn btn-wa btn-sm" type="submit">Share on WhatsApp</button></div>
+    </form>
+  </details>
+</section>

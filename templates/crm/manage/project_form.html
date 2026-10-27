@@ -1,9 +1,42 @@
 {% extends "base.html" %}
 {% block title %}{% if project %}Edit project{% else %}Add project{% endif %}{% endblock %}
+{% block extra_head %}{% include "crm/_leaflet.html" %}{% endblock %}
 {% block content %}
-<div class="page-head"><div><a class="crumb" href="{% url 'projects' %}">← Projects</a><h1>{% if project %}Edit {{ project.name }}{% else %}Add project{% endif %}</h1></div></div>
+<div class="page-head"><div><a class="crumb" href="{% url 'projects' %}">← Projects</a><h1>{% if project %}Edit {{ project.name }}{% else %}Add project{% endif %}</h1>
+  <p>Location, unit types and price range drive the automatic property suggestions on each lead and the projects map.</p></div></div>
 <form method="post" class="card card-body form-card" novalidate>{% csrf_token %}
   {% include "crm/_form.html" %}
+  <div class="field span-2" style="margin-top:14px">
+    <label>Pin on map</label>
+    <div id="pick-map" class="map map-md"></div>
+    <small class="help">Click on the map or drag the pin. Latitude and longitude fill in automatically.</small>
+  </div>
   <div class="form-actions"><a class="btn btn-secondary" href="{% url 'projects' %}">Cancel</a><button class="btn btn-primary" type="submit">Save project</button></div>
 </form>
+
+{% if project %}
+<section class="card" id="documents" style="margin-top:18px">
+  <div class="card-header"><h2>Documents sales can share</h2><span class="muted small">Only these files can be sent to clients. Each share is tracked.</span></div>
+  {% if documents %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Type</th><th>Title</th><th>Version</th><th>Status</th><th>Added</th><th></th></tr></thead>
+    <tbody>{% for d in documents %}<tr{% if not d.is_active %} class="muted"{% endif %}>
+      <td>{{ d.get_kind_display }}</td>
+      <td><a href="{% url 'project_doc_open' d.pk %}" target="_blank" rel="noopener">{{ d.title }}</a>{% if d.url %} <span class="badge b-gray">link</span>{% endif %}</td>
+      <td>v{{ d.version }}</td>
+      <td>{% if d.is_active %}<span class="badge b-green">Current</span>{% else %}<span class="badge b-gray">Withdrawn</span>{% endif %}</td>
+      <td class="small">{{ d.uploaded_at|date:"d M Y" }}{% if d.uploaded_by %} · {{ d.uploaded_by.get_full_name|default:d.uploaded_by.username }}{% endif %}</td>
+      <td><form method="post" action="{% url 'project_doc_toggle' d.pk %}">{% csrf_token %}<button class="btn btn-secondary btn-sm" type="submit">{% if d.is_active %}Withdraw{% else %}Restore{% endif %}</button></form></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty">No documents yet. Add the brochure and price list so sales can share them.</div>{% endif %}
+  <form method="post" action="{% url 'project_doc_add' project.pk %}" enctype="multipart/form-data" class="card-body" style="border-top:1px solid var(--border)" novalidate>{% csrf_token %}
+    <strong class="small">Add a document</strong>
+    {% include "crm/_form.html" with form=doc_form %}
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Upload</button></div>
+  </form>
+</section>
+{% endif %}
+{{ geo|json_script:"geo-data" }}
 {% endblock %}
+{% block scripts %}<script>CRM.initLocation("geo-data"); CRM.initLocationPicker("pick-map");</script>{% endblock %}

@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import messaging
-from .views import insights, leads, manage, public, work
+from .views import insights, leads, manage, public, sharing, work
 
 urlpatterns = [
     path("", insights.home, name="home"),
@@ -23,6 +23,10 @@ urlpatterns = [
     path("leads/<int:pk>/whatsapp/<slug:key>/", messaging.whatsapp, name="lead_whatsapp"),
     path("leads/<int:pk>/visit/", work.visit_schedule, name="visit_schedule"),
     path("leads/<int:pk>/book/", work.booking_create, name="booking_create"),
+    path("leads/<int:pk>/share/", sharing.lead_share, name="lead_share"),
+    path("shares/<int:pk>/revoke/", sharing.share_revoke, name="share_revoke"),
+    path("projects/map/", sharing.projects_map, name="projects_map"),
+    path("reports/shares/", sharing.share_report, name="share_report"),
     path("visits/", work.visit_calendar, name="visit_calendar"),
     path("visits/<int:pk>/update/", work.visit_update, name="visit_update"),
     path("bookings/", work.booking_list, name="booking_list"),
@@ -42,9 +46,16 @@ urlpatterns = [
     path("manage/projects/", manage.projects, name="projects"),
     path("manage/projects/new/", manage.project_create, name="project_create"),
     path("manage/projects/<int:pk>/", manage.project_edit, name="project_edit"),
+    path("manage/projects/<int:pk>/documents/", manage.project_doc_add, name="project_doc_add"),
+    path("manage/documents/<int:pk>/", sharing.project_doc_open, name="project_doc_open"),
+    path("manage/documents/<int:pk>/toggle/", manage.project_doc_toggle, name="project_doc_toggle"),
     path("manage/audit/", manage.audit_log, name="audit_log"),
     path("enquire/", public.enquire, name="enquire"),
     path("enquire/widget/", public.enquire_widget, name="enquire_widget"),
     path("enquire/thanks/", public.enquiry_thanks, name="enquiry_thanks"),
     path("website-form/", public.website_form, name="website_form"),
+    # Client-facing shared project pages: no login, access is by unguessable token only.
+    path("p/<str:token>/", sharing.share_page, name="share_page"),
+    path("p/<str:token>/d/<int:doc_id>/", sharing.share_doc, name="share_doc"),
+    path("p/<str:token>/interest/", sharing.share_interest, name="share_interest"),
 ]

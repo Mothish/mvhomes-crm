@@ -409,5 +409,144 @@
   document.addEventListener('input', clearFieldError);
   document.addEventListener('change', clearFieldError);
 
-  window.CRM = {initBoard: initBoard, initDuplicateCheck: initDuplicateCheck, initLocation: initLocation, initOtherFields: initOtherFields, toast: toast};
+  // ---------------------------------------------------------------- maps (Leaflet + OpenStreetMap)
+  var DOHA = [25.29, 51.53];
+
+  function baseMap(el) {
+    var map = L.map(el, {scrollWheelZoom: false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      // The site's Referrer-Policy is same-origin; OSM tile servers require a referrer.
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    return map;
+  }
+
+  // Map labels are built as text nodes so names typed into the CRM are never interpreted as HTML.
+  function textEl(tag, text, cls) {
+    var el = document.createElement(tag);
+    el.textContent = text;
+    if (cls) el.className = cls;
+    return el;
+  }
+
+  function pinPopup(pin) {
+    var box = textEl('div', '', 'map-pop');
+    var title = textEl(pin.url ? 'a' : 'strong', pin.title, 'map-pop-title');
+    if (pin.url) title.href = pin.url;
+    box.appendChild(title);
+    if (pin.tag) box.appendChild(textEl('span', pin.tag, 'badge b-gray'));
+    (pin.lines || []).forEach(function (line) { if (line) box.appendChild(textEl('div', line)); });
+    return box;
+  }
+
+  function pinsMap(elId, dataId) {
+    var el = document.getElementById(elId), src = document.getElementById(dataId);
+    if (!el || !src || !window.L) return null;
+    var data = JSON.parse(src.textContent), map = baseMap(el), points = [];
+    (data.pins || []).forEach(function (p) {
+      L.circleMarker([p.lat, p.lng], {radius: 9, color: '#fff', weight: 2, fillColor: p.color || '#1f3a68', fillOpacity: 1})
+        .bindPopup(pinPopup(p)).bindTooltip(textEl('span', p.title)).addTo(map);
+      points.push([p.lat, p.lng]);
+    });
+    if (data.center) {
+      L.circle(data.center, {radius: 2000, color: '#c99a3b', weight: 1, fillOpacity: 0.12}).addTo(map);
+      L.marker(data.center).bindTooltip(textEl('span', data.centerLabel || 'Client')).addTo(map);
+      points.push(data.center);
+    }
+    var demand = L.layerGroup((data.demand || []).map(function (d) {
+      return L.circle([d.lat, d.lng], {radius: 700 + d.count * 400, color: '#ef4444', weight: 1, fillColor: '#ef4444', fillOpacity: 0.18})
+        .bindTooltip(textEl('span', d.label + ': ' + d.count + ' open lead' + (d.count === 1 ? '' : 's')));
+    }));
+    if (points.length > 1) map.fitBounds(points, {padding: [30, 30], maxZoom: 14});
+    else map.setView(points[0] || DOHA, points.length ? 14 : 10);
+    return {map: map, demand: demand};
+  }
+
+  function initProjectsMap(elId, dataId, toggleId) {
+    var result = pinsMap(elId, dataId), toggle = document.getElementById(toggleId);
+    if (!result || !toggle) return;
+    function sync() { if (toggle.checked) result.demand.addTo(result.map); else result.demand.remove(); }
+    toggle.addEventListener('change', sync);
+    sync();
+  }
+
+  function coordsFromLink(text) {
+    var patterns = [/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/, /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/,
+                    /[?&](?:q|query|ll|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/];
+    for (var i = 0; i < patterns.length; i++) {
+      var m = patterns[i].exec(text || '');
+      if (m) return [parseFloat(m[1]), parseFloat(m[2])];
+    }
+    return null;
+  }
+
+  // Project form: click the map, drag the pin, type coordinates or paste a Google Maps link.
+  function initLocationPicker(elId) {
+    var el = document.getElementById(elId), lat = document.getElementById('id_latitude'),
+        lng = document.getElementById('id_longitude'), link = document.getElementById('id_maps_link');
+    if (!el || !lat || !lng || !window.L) return;
+    var map = baseMap(el), marker = null;
+    function write(a, b) { lat.value = a.toFixed(6); lng.value = b.toFixed(6); }
+    function place(a, b, pan) {
+      if (marker) marker.setLatLng([a, b]);
+      else {
+        marker = L.marker([a, b], {draggable: true}).addTo(map);
+        marker.on('dragend', function () { var p = marker.getLatLng(); write(p.lat, p.lng); });
+      }
+      if (pan) map.setView([a, b], Math.max(map.getZoom() || 0, 15));
+    }
+    function fromInputs() {
+      var a = parseFloat(lat.value), b = parseFloat(lng.value);
+      if (!isNaN(a) && !isNaN(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180) { place(a, b, true); return true; }
+      return false;
+    }
+    if (!fromInputs()) map.setView(DOHA, 10);
+    map.on('click', function (e) { write(e.latlng.lat, e.latlng.lng); place(e.latlng.lat, e.latlng.lng); });
+    lat.addEventListener('change', fromInputs);
+    lng.addEventListener('change', fromInputs);
+    if (link) link.addEventListener('input', function () {
+      var c = coordsFromLink(link.value);
+      if (c) { write(c[0], c[1]); place(c[0], c[1], true); }
+    });
+  }
+
+  // Lead page "share another project": only that project's documents, and a reason when it isn't suggested.
+  function initShareOther(formId) {
+    var form = document.getElementById(formId);
+    if (!form) return;
+    var select = form.querySelector('select[name=project]'), reasonBox = form.querySelector('.share-reason'),
+        reason = form.querySelector('[name=reason]');
+    function sync() {
+      var opt = select.options[select.selectedIndex], suggested = opt && opt.dataset.suggested === '1';
+      form.querySelectorAll('[data-doc-project]').forEach(function (row) {
+        var mine = row.dataset.docProject === select.value;
+        row.hidden = !mine;
+        row.querySelector('input').disabled = !mine;
+      });
+      var needReason = select.value && !suggested;
+      reasonBox.hidden = !needReason;
+      reason.required = needReason;
+    }
+    select.addEventListener('change', sync);
+    sync();
+  }
+
+  // Sharing opens WhatsApp in a new tab; refresh this page so the new share appears in the history.
+  document.addEventListener('submit', function (e) {
+    if (e.target.matches && e.target.matches('form[data-share]') && e.target.checkValidity()) {
+      setTimeout(function () { location.reload(); }, 1500);
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-copy]');
+    if (!btn || !navigator.clipboard) return;
+    navigator.clipboard.writeText(btn.dataset.copy).then(function () { toast('Link copied'); });
+  });
+
+  window.CRM = {initBoard: initBoard, initDuplicateCheck: initDuplicateCheck, initLocation: initLocation,
+                initOtherFields: initOtherFields, toast: toast, pinsMap: pinsMap, initProjectsMap: initProjectsMap,
+                initLocationPicker: initLocationPicker, initShareOther: initShareOther};
 })();

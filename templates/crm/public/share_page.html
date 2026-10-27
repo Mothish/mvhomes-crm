@@ -1,0 +1,66 @@
+{% extends "public_base.html" %}{% load static crm_tags %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow">{% if map_data %}{% include "crm/_leaflet.html" %}{% endif %}{% endblock %}
+{% block public %}
+<div class="share-wrap">
+  <header class="share-top">
+    <div class="public-brand">{% include "crm/_logo.html" %}{% include "crm/_wordmark.html" with dark=True %}</div>
+    <div class="small muted">Prepared for <strong>{{ link.lead.name|first_word }}</strong> by {{ agent }}</div>
+  </header>
+
+  {% if thanks %}<div class="alert alert-success">Thank you! {{ agent }} will contact you shortly.</div>{% endif %}
+
+  <section class="card share-hero">
+    {% if project.cover_image_url %}<img class="share-cover" src="{{ project.cover_image_url }}" alt="{{ project.name }}" referrerpolicy="no-referrer">{% endif %}
+    <div class="card-body">
+      <h1>{{ project.name }}</h1>
+      <p class="muted">📍 {{ project.place }}{% if project.location and project.location != project.place %} · {{ project.location }}{% endif %}</p>
+      <div class="sg-chips">
+        <span class="badge b-blue">{{ project.get_status_display }}{% if project.handover %} · handover {{ project.handover }}{% endif %}</span>
+        <span class="badge b-gray">{{ project.price_from|money_short }} – {{ project.price_to|money_short }}</span>
+        {% for t in project.unit_type_labels %}<span class="badge b-gray">{{ t }}</span>{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% if docs %}
+  <section class="card">
+    <div class="card-header"><h2>Documents</h2></div>
+    <div class="card-body stack" style="gap:8px">
+      {% for d in docs %}
+      {% if d.current %}
+      <a class="share-doc" href="{% url 'share_doc' link.token d.original.pk %}" target="_blank" rel="noopener">
+        <span>📄 {{ d.current.title }} <span class="muted small">v{{ d.current.version }}</span></span>
+        {% if d.updated %}<span class="badge b-amber">Updated version</span>{% endif %}
+        <span class="btn btn-secondary btn-sm">Open</span>
+      </a>
+      {% else %}
+      <div class="share-doc muted">📄 {{ d.original.title }} <span class="badge b-gray">No longer available</span></div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if map_data %}
+  <section class="card">
+    <div class="card-header"><h2>Location</h2><a class="btn btn-secondary btn-sm" href="https://www.google.com/maps/dir/?api=1&amp;destination={{ project.latitude }},{{ project.longitude }}" target="_blank" rel="noopener">Directions</a></div>
+    <div id="share-map" class="map map-md"></div>
+    {{ map_data|json_script:"share-map-data" }}
+  </section>
+  {% endif %}
+
+  <section class="card card-body share-cta">
+    <h2>Interested in {{ project.name }}?</h2>
+    {% if link.interest %}<p class="muted">You told us: <strong>{{ link.get_interest_display }}</strong>. {{ agent }} will be in touch.</p>{% endif %}
+    <form method="post" action="{% url 'share_interest' link.token %}" class="share-cta-buttons">{% csrf_token %}
+      <button class="btn btn-primary" name="interest" value="visit" type="submit">📅 Book a site visit</button>
+      <button class="btn btn-secondary" name="interest" value="interested" type="submit">👍 I'm interested</button>
+    </form>
+    <p class="small muted">Or call us on <a href="tel:{{ company_phone }}">{{ company_phone }}</a>.</p>
+  </section>
+  <p class="small muted share-foot">Prices and availability are indicative and may change. This page was shared with you personally by {{ company }}.</p>
+</div>
+<script src="{% static 'js/app.js' %}?v={{ asset_version }}"></script>
+{% if map_data %}<script>CRM.pinsMap("share-map", "share-map-data");</script>{% endif %}
+{% endblock %}

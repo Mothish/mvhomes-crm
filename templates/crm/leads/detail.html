@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% load crm_tags %}
 {% block title %}{{ lead.name }}{% endblock %}
+{% block extra_head %}{% if suggest_map %}{% include "crm/_leaflet.html" %}{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div class="lead-hero">
@@ -45,6 +46,7 @@
 
 <div class="grid-main">
   <div class="stack">
+    {% if lead.is_open %}{% include "crm/leads/_suggestions.html" %}{% endif %}
     {% if lead.is_open %}
     <section class="card">
       <div class="card-header"><h2>Log activity</h2><span class="muted small">Logging a call or WhatsApp also records the first response time</span></div>
@@ -95,6 +97,8 @@
         </dl>
       </div>
     </section>
+
+    {% include "crm/leads/_shares.html" %}
 
     <section class="card">
       <div class="card-header"><h2>Site visits</h2>{% if lead.is_open %}<a class="btn btn-secondary btn-sm" href="{% url 'visit_schedule' lead.pk %}">+ Schedule</a>{% endif %}</div>
@@ -160,3 +164,4 @@
   </form>
 </div>
 {% endblock %}
+{% block scripts %}<script>{% if suggest_map %}CRM.pinsMap("suggest-map", "suggest-map-data"); {% endif %}CRM.initShareOther("share-other");</script>{% endblock %}

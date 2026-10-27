@@ -1,5 +1,9 @@
+import os
+import secrets
+import uuid
+
 from django.conf import settings
-from django.core.validators import MinValueValidator, RegexValidator
+from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
 
@@ -32,11 +36,25 @@ class Team(models.Model):
 
 
 class Project(models.Model):
+    OFF_PLAN, UNDER_CONSTRUCTION, READY = "off_plan", "under_construction", "ready"
+    STATUSES = [(OFF_PLAN, "Off-plan"), (UNDER_CONSTRUCTION, "Under construction"), (READY, "Ready to move in")]
+
     name = models.CharField(max_length=100, unique=True)
-    location = models.CharField(max_length=120)
-    property_types = models.CharField(max_length=100, help_text="e.g. 1-3 BR apartments, Villas")
+    location = models.CharField("Address / landmark", max_length=120)
+    country = models.CharField(max_length=2, choices=COUNTRY_CHOICES, default=DEFAULT_COUNTRY)
+    city = models.CharField(max_length=60, blank=True)
+    area = models.CharField("Area / district", max_length=80, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                   validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                    validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    property_types = models.CharField("Types (display text)", max_length=100, help_text="e.g. 1-3 BR apartments, Villas")
+    unit_types = models.CharField(max_length=120, blank=True, help_text="Comma-separated Lead.PROPERTY_TYPES keys")
+    status = models.CharField(max_length=20, choices=STATUSES, default=READY)
+    handover = models.CharField("Handover", max_length=40, blank=True, help_text="e.g. Q4 2027")
     price_from = models.DecimalField("Price from", max_digits=14, decimal_places=2)
     price_to = models.DecimalField("Price to", max_digits=14, decimal_places=2)
+    cover_image_url = models.URLField("Cover image URL", blank=True)
     brochure_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -45,6 +63,23 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def unit_type_list(self):
+        return [t for t in self.unit_types.split(",") if t]
+
+    @property
+    def unit_type_labels(self):
+        labels = dict(Lead.PROPERTY_TYPES)
+        return [labels.get(t, t) for t in self.unit_type_list]
+
+    @property
+    def has_coordinates(self):
+        return self.latitude is not None and self.longitude is not None
+
+    @property
+    def place(self):
+        return ", ".join(p for p in (self.area, self.city) if p) or self.location
 
 
 class Profile(models.Model):
@@ -341,3 +376,93 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+def _document_path(instance, filename):
+    # Random name: the uploaded filename never reaches the filesystem path.
+    return f"project_docs/{uuid.uuid4().hex}{os.path.splitext(filename)[1].lower()}"
+
+
+DOCUMENT_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"]
+
+
+class ProjectDocument(models.Model):
+    """Admin-approved file (brochure, price list...) that sales staff may share. Versions replace each other."""
+    KINDS = [
+        ("brochure", "Brochure"),
+        ("price_list", "Price list"),
+        ("floor_plan", "Floor plans"),
+        ("payment_plan", "Payment plan"),
+        ("other", "Other"),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="documents")
+    kind = models.CharField(max_length=20, choices=KINDS)
+    title = models.CharField(max_length=100)
+    file = models.FileField(upload_to=_document_path, blank=True,
+                            validators=[FileExtensionValidator(DOCUMENT_EXTENSIONS)])
+    url = models.URLField("External link", blank=True)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                    on_delete=models.SET_NULL, related_name="+")
+    uploaded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["project__name", "kind", "-version"]
+
+    def __str__(self):
+        return f"{self.title} v{self.version}"
+
+    def current(self):
+        """This document, or its newest active replacement of the same kind; None if withdrawn."""
+        if self.is_active:
+            return self
+        return (ProjectDocument.objects.filter(project_id=self.project_id, kind=self.kind, is_active=True)
+                .order_by("-version").first())
+
+
+def _share_token():
+    return secrets.token_urlsafe(16)
+
+
+class ShareLink(models.Model):
+    """A tracked link an executive sends to a client; proves who shared which project/documents and when."""
+    INTEREST = [("interested", "Interested"), ("visit", "Wants a site visit")]
+
+    token = models.CharField(max_length=32, unique=True, default=_share_token, editable=False)
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="shares")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="shares")
+    documents = models.ManyToManyField(ProjectDocument, blank=True, related_name="shares")
+    sent_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(default=timezone.now)
+    off_suggestion = models.BooleanField(default=False)
+    reason = models.CharField(max_length=200, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name="+")
+    open_count = models.PositiveIntegerField(default=0)
+    first_opened_at = models.DateTimeField(null=True, blank=True)
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    interest = models.CharField(max_length=12, choices=INTEREST, blank=True)
+    interest_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.project} → {self.lead}"
+
+    @property
+    def is_revoked(self):
+        return self.revoked_at is not None
+
+
+class LinkOpen(models.Model):
+    link = models.ForeignKey(ShareLink, on_delete=models.CASCADE, related_name="opens")
+    document = models.ForeignKey(ProjectDocument, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    opened_at = models.DateTimeField(default=timezone.now)
+    device = models.CharField(max_length=30, blank=True)
+
+    class Meta:
+        ordering = ["-opened_at"]

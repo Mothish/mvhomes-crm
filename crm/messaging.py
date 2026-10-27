@@ -3,6 +3,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.http import Http404
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 
 from .access import SALES_ROLES, role_required
@@ -47,7 +48,7 @@ class _Safe(dict):
         return ""
 
 
-def render_message(lead, key, lang, agent=None):
+def render_message(lead, key, lang, agent=None, brochure=None):
     project = lead.project
     visit = lead.site_visits.filter(status="scheduled").order_by("scheduled_at").first()
     owner = agent or lead.owner
@@ -56,7 +57,8 @@ def render_message(lead, key, lang, agent=None):
         "name": lead.name.split()[0],
         "project": lead.project_label or ("مشاريعنا" if lang == "ar" else "our projects"),
         "location": project.location if project else "",
-        "brochure": project.brochure_url if project and project.brochure_url else f"{settings.COMPANY_WEBSITE}/brochure",
+        "brochure": brochure or (project.brochure_url if project and project.brochure_url
+                                 else f"{settings.COMPANY_WEBSITE}/brochure"),
         "agent": (owner.get_full_name() or owner.username) if owner else COMPANY,
         "visit_time": timezone.localtime(visit.scheduled_at).strftime(
             "%d-%m-%Y, %I:%M %p" if lang == "ar" else "%a %d %b, %I:%M %p"
@@ -65,16 +67,23 @@ def render_message(lead, key, lang, agent=None):
     return TEMPLATES[key][lang].format_map(_Safe(values))
 
 
+def _shareable_docs(lead):
+    if not lead.project or not lead.project.is_active:
+        return []
+    return list(lead.project.documents.filter(is_active=True, kind__in=("brochure", "price_list")))
+
+
 def lead_previews(lead):
+    tracked = "[tracked link to the brochure]" if _shareable_docs(lead) else None
     return [
-        {"key": k, "label": t["label"], "en": render_message(lead, k, "en")}
+        {"key": k, "label": t["label"], "en": render_message(lead, k, "en", brochure=tracked)}
         for k, t in TEMPLATES.items()
     ]
 
 
 @role_required(*SALES_ROLES)
 def whatsapp(request, pk, key):
-    from .models import Lead
+    from .models import Lead, ShareLink
     from .views.leads import get_visible_lead
     from .services import log_activity
 
@@ -83,6 +92,12 @@ def whatsapp(request, pk, key):
     lead = get_visible_lead(request, pk)
     lang = request.GET.get("lang") or lead.language
     lang = lang if lang in dict(Lead.LANGUAGES) else "en"
-    text = render_message(lead, key, lang, agent=request.user)
+    brochure = None
+    docs = _shareable_docs(lead) if key == "brochure" else []
+    if docs:
+        link = ShareLink.objects.create(lead=lead, project=lead.project, sent_by=request.user)
+        link.documents.set(docs)
+        brochure = request.build_absolute_uri(reverse("share_page", args=[link.token]))
+    text = render_message(lead, key, lang, agent=request.user, brochure=brochure)
     log_activity(lead, "whatsapp", request.user, note=f"WhatsApp sent: {TEMPLATES[key]['label']} ({lang.upper()})")
     return redirect(f"https://wa.me/{wa_number(lead.tel)}?text={quote(text)}")

@@ -6,6 +6,7 @@
   <title>{% block title %}{% endblock %} · {{ company }}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ asset_version }}">
+  {% block extra_head %}{% endblock %}
 </head>
 <body>{% block public %}{% endblock %}</body>
 </html>

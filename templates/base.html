@@ -11,6 +11,7 @@
   <title>{% block title %}{% endblock %} · {{ company }} CRM</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ asset_version }}">
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
 {% if user.is_authenticated and role %}
@@ -26,10 +27,12 @@
       <a href="{% url 'lead_board' %}" class="{% if u == 'lead_board' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 3h5v18H3zM10 3h5v12h-5zM17 3h4v8h-4z"/></svg>Pipeline</a>
       <a href="{% url 'visit_calendar' %}" class="{% if 'visit' in u %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 4h18v18H3zM16 2v4M8 2v4M3 10h18"/></svg>Site Visits</a>
       <a href="{% url 'booking_list' %}" class="{% if 'booking' in u %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10"/></svg>Bookings</a>
+      <a href="{% url 'projects_map' %}" class="{% if u == 'projects_map' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M12 22s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg>Projects Map</a>
       {% if is_mgmt or is_leader %}
       <div class="nav-section">Insights</div>
       <a href="{% url 'reports' %}" class="{% if u == 'reports' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-4 3 3 6-6"/></svg>Reports</a>
       <a href="{% url 'targets' %}" class="{% if u == 'targets' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>Targets</a>
+      <a href="{% url 'share_report' %}" class="{% if u == 'share_report' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Shared Links</a>
       {% endif %}
       {% if is_mgmt %}
       <a href="{% url 'ad_spend' %}" class="{% if u == 'ad_spend' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Ad Spend</a>

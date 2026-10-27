@@ -1,0 +1,11 @@
+{% extends "public_base.html" %}
+{% block title %}Link no longer valid{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block public %}
+<div class="auth-wrap"><div class="auth-card" style="text-align:center">
+  {% include "crm/_logo.html" with size="lg" %}
+  <h1>This link is no longer valid</h1>
+  <p class="muted">The details shared earlier have been withdrawn or updated. Please contact your {{ company }} advisor for the latest information.</p>
+  <p>Call <a href="tel:{{ company_phone }}"><strong>{{ company_phone }}</strong></a></p>
+</div></div>
+{% endblock %}

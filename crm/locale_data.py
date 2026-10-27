@@ -3,6 +3,7 @@
 All money is stored in BASE_CURRENCY and converted for display or entry.
 """
 from contextvars import ContextVar
+import math
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 BASE_CURRENCY = "QAR"
@@ -62,6 +63,35 @@ DEFAULT_DIAL = "+974"
 COUNTRY_CHOICES = [(iso, f"{flag} {name}") for iso, name, flag, _dial, _cities in COUNTRIES]
 DIAL_CHOICES = [(dial, f"{flag} {dial}") for _iso, _name, flag, dial, _cities in COUNTRIES]
 COUNTRY_NAMES = {iso: name for iso, name, *_ in COUNTRIES}
+
+# Approximate city centres, used for "nearby" project matching and map demand circles.
+CITY_CENTERS = {
+    ("QA", "doha"): (25.2854, 51.5310),
+    ("QA", "lusail"): (25.4207, 51.4904),
+    ("QA", "al wakrah"): (25.1715, 51.6034),
+    ("QA", "al rayyan"): (25.2919, 51.4244),
+    ("QA", "al khor"): (25.6839, 51.5058),
+    ("QA", "umm salal"): (25.4152, 51.4065),
+    ("AE", "dubai"): (25.2048, 55.2708),
+    ("AE", "abu dhabi"): (24.4539, 54.3773),
+    ("AE", "sharjah"): (25.3463, 55.4209),
+    ("SA", "riyadh"): (24.7136, 46.6753),
+    ("SA", "jeddah"): (21.4858, 39.1925),
+    ("KW", "kuwait city"): (29.3759, 47.9774),
+    ("BH", "manama"): (26.2285, 50.5860),
+    ("OM", "muscat"): (23.5880, 58.3829),
+}
+
+
+def city_center(country, city):
+    return CITY_CENTERS.get((country, (city or "").strip().lower()))
+
+
+def distance_km(a, b):
+    """Great-circle distance between two (lat, lng) points."""
+    lat1, lng1, lat2, lng2 = map(math.radians, (float(a[0]), float(a[1]), float(b[0]), float(b[1])))
+    h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lng2 - lng1) / 2) ** 2
+    return 6371 * 2 * math.asin(math.sqrt(h))
 COUNTRY_CURRENCY = {
     "QA": "QAR", "AE": "AED", "SA": "SAR", "KW": "KWD", "BH": "BHD", "OM": "OMR",
     "IN": "INR", "PK": "PKR", "PH": "PHP", "EG": "EGP", "GB": "GBP", "US": "USD",

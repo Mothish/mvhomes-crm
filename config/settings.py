@@ -91,6 +91,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Uploaded project documents. Deliberately not exposed via a public URL: files are only served
+# through views that check login or a valid share token.
+MEDIA_ROOT = BASE_DIR / "media"
+DOCUMENT_MAX_MB = 15
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage" if DEBUG

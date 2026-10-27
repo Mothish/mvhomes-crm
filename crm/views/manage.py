@@ -1,12 +1,15 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db import transaction
+from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from ..access import ADMIN, post_only, role_required
-from ..forms import ProjectForm, TeamForm, TransferForm, UserForm
-from ..models import AuditLog, Lead, Project, Team
+from ..forms import ProjectDocumentForm, ProjectForm, TeamForm, TransferForm, UserForm
+from ..locale_data import geo_data
+from ..models import AuditLog, Lead, Project, ProjectDocument, Team
 from ..services import audit, transfer_leads
 
 
@@ -76,7 +79,8 @@ def team_create(request):
 @role_required(ADMIN)
 def projects(request):
     items = Project.objects.annotate(
-        lead_count=Count("leads", distinct=True), booking_count=Count("bookings", distinct=True)
+        lead_count=Count("leads", distinct=True), booking_count=Count("bookings", distinct=True),
+        doc_count=Count("documents", filter=Q(documents__is_active=True), distinct=True),
     )
     return render(request, "crm/manage/projects.html", {"items": items})
 
@@ -88,7 +92,44 @@ def _project_form(request, instance=None):
         audit(request.user, "update" if instance else "create", project, f"Saved project {project.name}")
         messages.success(request, f"Project {project.name} saved.")
         return redirect("projects")
-    return render(request, "crm/manage/project_form.html", {"form": form, "project": instance})
+    return render(request, "crm/manage/project_form.html", {
+        "form": form, "project": instance, "geo": geo_data(),
+        "documents": instance.documents.select_related("uploaded_by") if instance else [],
+        "doc_form": ProjectDocumentForm() if instance else None,
+    })
+
+
+@role_required(ADMIN)
+@post_only
+def project_doc_add(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    form = ProjectDocumentForm(request.POST, request.FILES)
+    if form.is_valid():
+        doc = form.save(commit=False)
+        doc.project, doc.uploaded_by = project, request.user
+        same_kind = project.documents.filter(kind=doc.kind)
+        with transaction.atomic():
+            doc.version = (same_kind.aggregate(v=Max("version"))["v"] or 0) + 1
+            if form.cleaned_data["replaces"]:
+                same_kind.filter(is_active=True).update(is_active=False)
+            doc.save()
+        audit(request.user, "create", doc, f"Added {doc.get_kind_display()} '{doc.title}' v{doc.version} to {project.name}")
+        messages.success(request, f"{doc.title} (v{doc.version}) added. Sales staff can now share it.")
+    else:
+        messages.error(request, " ".join(e for errs in form.errors.values() for e in errs))
+    return redirect(reverse("project_edit", args=[pk]) + "#documents")
+
+
+@role_required(ADMIN)
+@post_only
+def project_doc_toggle(request, pk):
+    doc = get_object_or_404(ProjectDocument.objects.select_related("project"), pk=pk)
+    doc.is_active = not doc.is_active
+    doc.save(update_fields=["is_active"])
+    state = "restored" if doc.is_active else "withdrawn"
+    audit(request.user, "update", doc, f"{state.capitalize()} '{doc.title}' v{doc.version} of {doc.project.name}")
+    messages.success(request, f"{doc.title} v{doc.version} {state}.")
+    return redirect(reverse("project_edit", args=[doc.project_id]) + "#documents")
 
 
 @role_required(ADMIN)

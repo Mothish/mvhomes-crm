@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load crm_tags %}
+{% block title %}Projects map{% endblock %}
+{% block extra_head %}{% include "crm/_leaflet.html" %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Projects map</h1><p>All active projects. Tap a pin for price, status and handover.{% if map_data.demand %} Red circles show where your open leads want to buy.{% endif %}</p></div>
+  {% if map_data.demand %}<label class="check"><input type="checkbox" id="demand-toggle" checked> Show lead demand</label>{% endif %}
+</div>
+<div class="card">
+  <div id="projects-map" class="map map-lg"></div>
+  <div class="card-body map-legend small muted">
+    <span><i class="dot" style="background:#1f3a68"></i> Project</span>
+    {% if map_data.demand %}<span><i class="dot" style="background:#ef4444;opacity:.5"></i> Open leads by city (bigger = more)</span>{% endif %}
+  </div>
+</div>
+{% if missing %}
+<div class="alert alert-warning" style="margin-top:14px">Not on the map yet (no location pin): {% for p in missing %}<strong>{{ p.name }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}.{% if is_admin %} Add the pin from Projects → edit.{% endif %}</div>
+{% endif %}
+{{ map_data|json_script:"map-data" }}
+{% endblock %}
+{% block scripts %}<script>CRM.initProjectsMap("projects-map", "map-data", "demand-toggle");</script>{% endblock %}
